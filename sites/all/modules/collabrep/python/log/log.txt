@@ -1,0 +1,7 @@
+[Mon 05/12/16, 17:15:19] - check_shared_database try
+[Mon 05/12/16, 17:15:19] - dbArray if glorep 141.250.5.21 glorep_shared
+[Mon 05/12/16, 17:15:19] - connection ko
+[Mon 05/12/16, 17:15:19] - ok False
+[Mon 05/12/16, 17:15:19] - check_shared_database try
+[Mon 05/12/16, 17:15:19] - dbArray if glorep 141.250.5.21 glorep_shared
+[Mon 05/12/16, 17:15:19] - connection ko

@@ -1,0 +1,181 @@
+<?php
+error_reporting(E_ALL);
+ini_set('display_errors', TRUE);
+ini_set('display_startup_errors', TRUE);
+function softwareAttachment_schema(){
+	//_____SOFTWARE ATTACHMENT FORM_______
+		$schema['SA_softwareUpload']= array (
+			'description'=>'Share your software with everybody!',
+			'fields'=> array (
+				'Id_Sa'=>array(
+					'description'=>'Refers to the software Id',
+					'type'=>'int',
+					'not null'=>true,
+					'unsigned'=>true
+				),
+				'Name'=>array(
+					'description'=>'Name of the software.',
+					'type'=>'varchar',
+					'size'=>'normal',
+					'not null'=>true,
+					'length'=>250
+				),
+				'SA_Description'=>array(
+					'description'=>'Information about the software',
+					'type'=>'varchar',
+					'not null'=>true,
+					'size'=>'normal',
+					'length'=>500
+				),
+				'Authors' => array(
+					'description' => 'Author(s) of the software',
+					'type' => 'varchar',
+					'size' => 'normal',
+					'not null' => false,
+					'length' => 150
+				),
+				'Extensions'=>array(
+					'description'=>'Extensions allowed by the software',
+					'type'=>'varchar',
+					'not null'=>true,
+					'length'=>200
+				),
+				'Version'=>array(
+					'description'=>'The version of the software.',
+					'type'=>'varchar',
+					'not null'=>false,
+					'length'=>15
+				),
+				'OpSystem'=>array(
+					'description'=>'The Operating Systems where your software can run',
+					'type'=>'varchar',
+					'not null'=>false,
+					'length'=>200
+				),
+				'Copyright' => array(
+					'description' => 'Whether copyright or other restriction apply to the use of this software.',
+					'type' => 'varchar',
+					'size' => 'normal',
+					'not null' => true,
+					'length' => 5
+				),
+				'rights_Description' => array(
+					'description' => 'Comments on the conditions of use of this software.',
+					'type' => 'varchar',
+					'size' => 'normal',
+					'not null' => false,
+					'length' => 1000
+				),
+				'Id_Fd' => array(
+					'description' => 'A federation-unique ID.',
+					'type' => 'varchar',
+					'size' => 'normal',
+					'not null' => true,
+					'length' => 255
+				),
+			),
+			'unique keys' => array ('Id_Sa'=> array('Id_Sa'),'Id_Fd' => array ('Id_Fd')),
+			'primary key' => array ('Id_Sa','Id_Fd')
+		);
+		$name=variable_get('site_name', '0');
+		variable_set('collabrep_my_name',$name);
+		variable_set('collabrep_federation_status','0');
+		variable_set('collabrep_bootstrap_address',NULL);
+		variable_set('collabrep_bootstrap_id',NULL);
+		variable_set('collabrep_db_address',NULL);
+		variable_set('collabrep_db_url',NULL);
+		variable_set('collabrep_federation_password',NULL);
+		variable_set('collabrep_login_password',NULL);
+		variable_set('collabrep_login_user',NULL);
+		variable_set('collabrep_federation_name','NOFEDERATION');
+	return $schema;
+}
+function softwareAttachment_uninstall(){
+	  $sql = 'SELECT nid FROM {node} n WHERE n.type = :type';
+	  $result = db_query($sql, array(':type' => 'softwareAttachment'));
+	  $nids = array();
+	  foreach ($result as $row) {
+	    $nids[] = $row->nid;
+	  }
+
+	  // Delete all the nodes at once
+	  node_delete_multiple($nids);
+	  $instance = array('field_name' => 'safiles','bundle' => 'softwareAttachment','entity_type' => 'node');
+  		field_delete_instance($instance);
+
+  	//  $instance = array('field_name' => 'sabody','bundle' => 'softwareAttachment','entity_type' => 'node');
+  		//field_delete_instance($instance);
+
+	  field_delete_field('safiles');
+	  //field_delete_field('sabody');
+		//delete_custom_fields();
+		node_type_delete('softwareAttachment'); // Trying to get property of non-object in comment_node_type_delete()
+	  // Purge all field infromation
+	  field_purge_batch(1000);
+
+	  drupal_set_message(t('Rimozione completata'));
+}
+function softwareAttachment_install(){
+
+	//===================== CREAZIONE DELLA CARTELLA '/softwareAttachment' ========================
+
+	$softwareAttachment_file_path = /*file_directory_path().*/'public://softwareAttachment';
+	if( !file_prepare_directory($softwareAttachment_file_path,FILE_CREATE_DIRECTORY) || !file_prepare_directory($softwareAttachment_file_path,FILE_MODIFY_PERMISSIONS) ){
+		drupal_set_message('Cannot create or set the right permissions to the file folder. Please create a "softwareAttachment" folder inside '.conf_path().'/files'.'/collabrep/ and make it writeable or the module will not work.','error');
+	}
+
+	node_types_rebuild();
+	   foreach (_softwareAttachment_installed_fields() as $field) {
+       		 field_create_field($field);
+   	 }
+   	 foreach (_softwareAttachment_installed_instances() as $instance) {
+       	$instance['entity_type'] = 'node';
+        $instance['bundle'] = 'softwareAttachment';
+        field_create_instance($instance);
+    }
+	drupal_set_message(t('Creation of custom fields completed'));
+}
+
+
+function _softwareAttachment_installed_fields(){
+	return array(
+      	//================== Files Field ============================
+      	'SA_files' => array(
+      		'field_name' => 'safiles',
+      		'type' => 'file',
+      		'cardinality' => FIELD_CARDINALITY_UNLIMITED, /* oppure -1 */
+      		'locked' => FALSE,
+      	),
+	);
+}
+function _softwareAttachment_installed_instances(){
+	return array(
+
+      	//================== Files Field ============================
+      	'safiles' => array(
+      		'field_name' => 'safiles',
+					'label' => 'Software attached',
+      		'description' => t('Attach here your software'),
+      		'required' => false,
+      		'settings' => array(
+      			'file_extensions' => 'zip rar tar deb bz2 gz z 7z apk jar tar.gz tgz tar.bz2 exe',
+ 					'file_directory' => '/softwareAttachment',
+         		'max_filesize' => '150 MB',
+      		),
+      		'widget' => array(
+      			'weight' => 30,
+      		),
+      	),
+	);
+}
+//function add_custom_fields() {
+
+/*function delete_custom_fields() {
+    foreach (array_keys(_softwareAttachment_installed_fields()) as $field) {
+        field_delete_field($field);
+    }
+    $instances = field_info_instances('node', 'softwareAttachment');
+    foreach ($instances as $instance_name => $instance) {
+        field_delete_instance($instance);
+    }
+}*/

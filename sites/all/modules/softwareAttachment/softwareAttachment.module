@@ -1,0 +1,396 @@
+<?php
+
+$ops='';
+function softwareAttachment_help($path, $arg) {
+  switch ($path) {
+    case "admin/help#softwareAttachment":
+      return '<p>'.  t("Module used to upload software.") .'</p>';
+      break;
+  }
+}
+function softwareAttachment_node_info()
+{
+	return array(
+		'softwareAttachment' => array(
+    		'name' => t('Software Attachment'),
+      		'base' => 'softwareAttachment',
+      		'description' => t('Upload a software and make it accessible to everybody'),
+      		'title_label' => t('Title'),
+    		),
+	);
+}
+function softwareAttachment_permission()
+{
+	return array(
+    	'manage softwareAttachment' => array(
+    		'title' => t('manage softwareAttachment'),
+    		'description' => t(''),
+    	),
+    	'create or edit own softwareAttachment' => array(
+    		'title' => t('create or edit own softwareAttachment'),
+    		'description' => t(''),
+    	),
+    	'view softwareAttachment' => array(
+    		'title' => t('view softwareAttachment'),
+    		'description' => t(''),
+    	),
+  	);
+}
+
+function softwareAttachment_form_alter(&$form, &$form_state, $form_id) {
+  //  drupal_set_message($form_id);
+
+    if ($form_id == "softwareAttachment_node_form") {
+        // Change title to Software Name
+        $form['title']['#title'] = t('Software Name');
+    }
+
+}
+function softwareAttachment_form($node,&$form_state){
+  $form=node_content_form($node, $form_state);
+  //=======================SA_softwareUpload================================
+  $options = array(
+  'Windows' => t('Windows'),
+  'MacOS' => t('Mac Os X'),
+  'Linux' => t('Linux'),
+  'Android' => t('Android'),
+  'Others' => t('Other OS'),
+  );
+
+  $form['SA_softwareUpload']=array(
+    '#type' => 'container',
+    '#title' => t('Software Attachment'),
+    '#weight' => 20,
+  );
+  $form['SA_softwareUpload']['SA_Description']=array(
+    '#type'=>'textarea',
+    '#title'=>t('Software Description'),
+    '#default_value'=>isset($node->SA_Description) ? $node->SA_Description :'',
+    '#description'=>t('General information about your software'),
+    '#required'=> TRUE,
+  );
+  $form['SA_softwareUpload']['Authors']= array(
+  '#type'=>'textfield',
+  '#title'=>t('Author(s)'),
+  '#description'=>t('Specify the Author(s) of the software'),
+  '#default_value'=>isset($node->Authors) ? $node->Authors : '',
+  );
+  $form['SA_softwareUpload']['Extensions']= array(
+    '#type'=>'textfield',
+    '#title'=>t('Extensions allowed'),
+    '#description'=>t('Insert the file extensions allowed from your software, separeted by a space(Ex. exe txt jpg)'),
+    '#default_value'=>isset($node->Extensions) ? $node->Extensions :'',
+    '#required'=>TRUE,
+  );
+  $form['SA_softwareUpload']['Version']=array(
+    '#type'=>'textfield',
+    '#title'=>t('Version'),
+    '#default_value'=>isset($node->Version) ? $node->Version :'',
+    '#description'=>t('Version of the software'),
+  );
+  $form['SA_softwareUpload']['OpSystem'] = array(
+  '#title'=>t('Operating Systems'),
+  '#type' => 'checkboxes',
+  '#description'=>t('The Operating systems where your program can be installed'),
+  '#options'=>$options,
+  '#default_value'=>isset($node->OpSystem) ? _softwareAttachment_checkvalue($node->OpSystem) :array(),
+  );
+
+
+  $form['SA_softwareUpload']['Copyright']= array(
+		'#type' => 'select',
+		'#title' => t('Copyright and Other Restrictions'),
+		'#description'   => t('Please specify if there are copyright or other restrictions applies to the use of this software.'),
+		'#default_value' => isset($node->Copyright) ? $node->Copyright : '',
+		'#options' => array(
+			'no'=>t('No'),
+			'yes'=>t('Yes'),
+		),
+		'#required'=> TRUE,
+	);
+  $form['SA_softwareUpload']['rights_Description']= array(
+    '#type' => 'textfield',
+    '#title' => t('Right Description'),
+    '#description'   => t('Please specify comments on the conditions of use of this software.'),
+    '#default_value' => isset($node->rights_Description) ? $node->rights_Description : '',
+
+  );
+
+if(!empty($node->Id_Fd))
+{
+      if( user_access('manage softwareAttachment') )
+  {
+        // l'amministratore può visualizzare il FUID, quindi creo il campo 'shown_fuid'
+        $form['shown_Id_Fd'] = array(
+          '#type' => 'item',
+          '#title' => 'Id_Fd',
+          '#weight'=>13,
+          '#markup' => $node->Id_Fd,
+          '#description' => t('The Federation Unique ID of this object (this field is automatically generated and it\'s empty on unsaved objects).Use this FUID to specify this node as a dependency'),
+          );
+  }
+}
+
+  return $form;
+
+}
+function softwareAttachment_validate($form, &$form_state) {
+  global $ops;
+  $selected = array();
+  foreach($form_state['SA_softwareUpload']['OpSystem']['#value'] as $a => $b)
+  {
+      if((string)$b != "0")
+      {
+           $selected[] = $b;
+      }
+  }
+  variable_set("var_selected", $selected);
+    if ($form_state['SA_softwareUpload']['OpSystem']['Windows']['#checked']==TRUE){
+      $ops=$ops.'Windows';
+
+    }
+    if ($form_state['SA_softwareUpload']['OpSystem']['MacOS']['#checked']==TRUE){
+      $ops=$ops.' MacOS';
+    }
+    if ($form_state['SA_softwareUpload']['OpSystem']['Linux']['#checked']==TRUE){
+      $ops=$ops.' Linux';
+    }
+    if ($form_state['SA_softwareUpload']['OpSystem']['Android']['#checked']==TRUE){
+      $ops=$ops.' Android';
+    }
+    if ($form_state['SA_softwareUpload']['OpSystem']['Others']['#checked']==TRUE){
+      $ops=$ops.' Others';
+    }
+}
+function softwareAttachment_insert($node){
+  $lobj_tfuid=variable_get('collabrep_federation_name', 'NOFEDERATION').' '.variable_get('collabrep_my_name', substr(preg_replace('[^A-Za-z0-9]','',variable_get('site_name', "")),0,20)).' '.$node->nid;
+
+  global $ops;
+
+  db_insert('SA_softwareUpload')
+		->fields(array(
+				'Id_Sa' => $node->nid,
+        'Id_Fd'=>$lobj_tfuid,
+				'Name' => $node->title,
+				'SA_Description' => $node->SA_Description,
+        'Authors'=>$node->Authors,
+        'Extensions'=>$node->Extensions,
+				'Version' => $node->Version,
+        'OpSystem'=>$ops,
+				'Copyright' => $node->Copyright,
+				'rights_Description' => $node->rights_Description,
+
+
+			)
+		)
+	->execute();
+}
+function softwareAttachment_update($node)
+{
+  global $ops;
+	//Updating SA_softwareUpload
+	db_update('SA_softwareUpload')
+		->fields(array(
+					'Name' => $node->title,
+					'SA_Description' => $node->SA_Description,
+          'Authors'=>$node->Authors,
+          'Extensions'=>$node->Extensions,
+					'Version' => $node->Version,
+          'OpSystem'=>$ops,
+					'Copyright' => $node->Copyright,
+					'rights_Description' => $node->rights_Description,
+
+				)
+			)
+		->condition('Id_Sa',$node->nid)
+		->execute();
+}
+
+function softwareAttachment_delete($node){
+  	db_delete('SA_softwareUpload')->condition('Id_Sa',$node->nid)->execute();
+}
+function softwareAttachment_load($nodes){
+  global $ops;
+  $query = db_select('SA_softwareUpload','node');
+  	$query->addField('node','Id_Sa','nid');
+    $query->addField('node','Id_Fd');
+    $query->fields('node',array('Name','SA_Description','Authors','Extensions','Version','OpSystem','Copyright','rights_Description'))
+    ->condition('node.Id_Sa', array_keys($nodes));
+    $result = $query->execute();
+
+	foreach ($result as $record){
+    if (!is_object($record)) {
+            $record = new stdClass();
+              $record->OpSystem=$ops;
+          }
+    $nodes[$record->nid]->Id_Fd	              = $record->Id_Fd;
+		$nodes[$record->nid]->SA_Description    	= $record->SA_Description;
+    $nodes[$record->nid]->Authors             = $record->Authors;
+    $nodes[$record->nid]->Extensions          = $record->Extensions;
+  	$nodes[$record->nid]->Version           	= $record->Version;
+    $nodes[$record->nid]->OpSystem            = $record->OpSystem;
+		$nodes[$record->nid]->Copyright	        	= $record->Copyright;
+		$nodes[$record->nid]->rights_Description	= $record->rights_Description;
+
+  }
+
+}
+function softwareAttachment_view($node,$view_mode)
+{
+/*	if(!user_access('manage softwareAttachment') && $node->Deleted=='yes')
+	{
+  		hide($node->content);
+  	}
+	else
+	{*/
+  		if($view_mode != 'teaser')		//	or if($view_mode == 'full')
+		{
+			$qry=db_select('SA_softwareUpload', 'sa')
+  				->fields('sa')
+  				->condition('Id_Sa', $node->nid, '=')
+  				->execute()
+  				->fetchAssoc();
+        $node->content['show_info'] = array(
+          '#type' =>'fieldset',
+          '#title' => t('General Informations'),
+          '#collapsible' => TRUE,
+          '#collapsed' => TRUE,
+          '#weight' => 4
+        );
+        $node->content['show_info']['show_inf'] = array(
+          '#prefix' => '<div class="theme_softwareAttachment_show_information">',
+          '#markup' => theme_softwareAttachment_show_information($node->nid),
+          '#suffix' => '</div>'
+        );
+          $node->content['show_copyrights'] = array(
+            '#type' =>'fieldset',
+            '#title' => t('Copyright'),
+            '#collapsible' => TRUE,
+            '#collapsed' => TRUE,
+            '#weight' => 5
+          );
+          $node->content['show_copyrights']['show_cop'] = array(
+            '#prefix' => '<div class="theme_softwareAttachment_show_copyrights">',
+            '#markup' => theme_softwareAttachment_show_copyrights($node->nid),
+            '#suffix' => '</div>'
+          );
+	  if(!user_access('create or edit own softwareAttachment')){
+            $node->content['safiles']['#access']=0;
+          }
+		}
+    if($view_mode == 'teaser'){
+      $node->content['show_descriptions'] = array(
+     '#markup' => theme_softwareAttachment_show_description_tease($node->nid),
+     '#weight' => 0
+    );
+    }
+
+	if (isset($node->Id_Fd) && user_access('manage softwareAttachment')) { //Id_Fd is only shown to administrators
+      		$node->content['Id_Fd'] = array(
+				'#markup' => theme_softwareAttachment_show_Id_Fd($node->Id_Fd),
+				'#weight' => 6);
+    	}
+
+	return $node;
+}
+function _softwareAttachment_checkvalue($values){
+  $checkval = explode(" ", $values);
+  return $checkval;
+}
+
+function theme_softwareAttachment_show_Id_Fd($Id_Fd)
+	{
+		$output = '';
+		if (isset($Id_Fd))
+		{
+			$output = '<b>Id_Fd</b>: '.$Id_Fd;
+		}
+	return $output;
+	}
+  function theme_softwareAttachment_show_information($node_id){
+  	$output = '';
+    global $ops;
+  	if (isset($node_id)) {
+  	$show_info = db_query('SELECT Authors,SA_Description,Extensions,Version,OpSystem FROM {SA_softwareUpload} WHERE Id_Sa=:node_id',array(':node_id'=>$node_id))->fetchObject();
+        $output = '<b>Software Description :</b> '.check_plain($show_info->SA_Description).'<br/>' ;
+      if ($show_info->Authors!=''){
+  			$output = $output.'<b>Authors :</b> '.check_plain($show_info->Authors).'<br/>' ;
+      }
+      $output=$output.'<b>File Extensions Allowed : </b>'.check_plain($show_info->Extensions).'<br/>';
+  		if($show_info->Version!=''){
+        $output =$output.'<b>Software Version :</b> '.check_plain($show_info->Version).'<br/>' ;
+      }
+      if($show_info->OpSystem!=''){
+        $output =$output.'<b>Operating Systems :</b> '.check_plain($show_info->OpSystem).'<br/>' ;
+      }
+  	}
+  	return $output;
+  }
+  function theme_softwareAttachment_show_copyrights($node_id){
+  	if (isset($node_id)) {
+  		$show_copyrights = db_query('SELECT * FROM {SA_softwareUpload} WHERE Id_Sa=:node_id',array(':node_id'=>$node_id))->fetchObject();
+  			$output = '<b>Copyrights and Other Restriction :</b> '.check_plain($show_copyrights->Copyright).'<br/>';
+
+      if($show_copyrights->rights_Description!=''){
+        $output=$output.'<b>Rights Description : </b>'.check_plain($show_copyrights->rights_Description).'<br/>';
+      }
+  	}
+  	return $output;
+  }
+  function theme_softwareAttachment_show_description_tease($node_id){
+    if (isset($node_id)) {
+      $show_desc = db_query('SELECT * FROM {SA_softwareUpload} WHERE Id_Sa=:node_id',array(':node_id'=>$node_id))->fetchObject();
+        $output = '<b>Software Description :</b> '.check_plain($show_desc->SA_Description).'<br/>';
+    }
+    return $output;
+  }
+  /*function _softwareAttachment_download_form($form, &$form_state, $nid) {
+
+  	$form['downloadbutton'] = array(
+  	    '#type' => 'button',
+  	    '#value' => t('Download!'),
+  		'#weight' => 1,
+  	);
+  	$form['#action'] = url('softwareAttachment/download/'.$nid);
+  	return $form;
+  }
+  function theme_softwareAttachment_file_list($node) {
+  	$output = '<h3>'.t('Files included in this Learning Object:').'</h3><ul>';
+    	//$lobj_fil=$node->file_list;
+
+    	$filetoexp = db_query('SELECT file_list FROM SA_softwareUpload WHERE node_id=:nid', array(':nid' => $node->nid))->fetchAssoc();
+  	$files = explode(',', $filetoexp['file_list']);
+  	foreach ($files as $value) {
+  		$output .= '<li>'.basename($value).'</li>';
+
+  	}
+  }*/
+/*function softwareAttachment_type_set_defaults($info = array()) {
+  $info = (array) $info;
+  $new_type = $info + array(
+    'type' => '',
+    'name' => '',
+    'base' => '',
+    'description' => '',
+    'help' => '',
+    'custom' => 0,
+    'modified' => 0,
+    'locked' => 1,
+    'disabled' => 0,
+    'is_new' => 1,
+    'has_title' => 1,
+    'title_label' => 'Software Name',
+  );
+  $new_type = (object) $new_type;
+
+  // If the type has no title, set an empty label.
+  if (!$new_type->has_title) {
+    $new_type->title_label = '';
+  }
+  if (empty($new_type->module)) {
+    $new_type->module = $new_type->base == 'node_content' ? 'node' : '';
+  }
+  $new_type->orig_type = isset($info['type']) ? $info['type'] : '';
+
+  return $new_type;
+}*/

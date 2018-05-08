@@ -1,0 +1,7 @@
+; $Id$
+name = Search Linkable Learning Object 
+description = New way of searching Linkable Object
+core = 7.x
+
+package = "CollabRep"
+dependencies[] = "linkableobject"

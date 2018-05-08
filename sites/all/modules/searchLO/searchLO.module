@@ -1,0 +1,1281 @@
+<?php
+//----------------hook_search_status
+function searchLO_menu(){
+	$items=array();
+    		$items['src'] = array(
+        		'title' => 'Search',
+			'description' => 'first page',
+        		'access arguments' => array('access content'),
+        		'page callback' => 'drupal_get_form',
+        		'page arguments' => array('searchLO_form'),
+			'type' => MENU_NORMAL_ITEM,
+    		);
+    		$items['src/LearningObject'] = array(
+        		'title' => 'Search Learning Object',
+			'description' => 'learning module',
+        		'access arguments' => array('access content'),
+        		'page callback' => 'drupal_get_form',
+			'page arguments' => array('searchLO_form'),       
+			'type' => MENU_LOCAL_TASK,
+    		);
+    		$items['src/SoftwareAttachment'] = array(
+        		'title' => 'Search Software Attachment',
+			'description' => 'software module',
+        		'access arguments' => array('access content'),
+        		'page callback' => 'drupal_get_form',
+			'page arguments' => array('searchSA'),      
+			'type' => MENU_LOCAL_TASK,
+    		);
+		$items['src/SoftwareAttachment&LearningObject'] = array(
+        		'title' => 'Search LO by SA',
+			'description' => 'software module',
+        		'access arguments' => array('access content'),
+        		'page callback' => 'drupal_get_form',
+			'page arguments' => array('searchCombine'),      
+			'type' => MENU_LOCAL_TASK,
+    		);
+    	return $items;
+}
+
+
+//----------------hook_search_reset
+function searchLO_search_reset() {
+  db_update('search_dataset')->fields(array('reindex' => REQUEST_TIME))->condition('type', 'linkableobject')->execute();
+}
+
+//----------------hook_search_info
+function searchLO_search_info() {
+  return array(
+    'title' => 'searchLO',
+  );
+}
+
+//--------------------------------------PROVA
+
+function searchLO_update_index() {
+  $limit = (int) variable_get('search_cron_limit', 100);
+  $result = db_query_range("SELECT n.nid FROM {node} n LEFT JOIN {search_dataset} d ON d.type = 'node' AND d.sid = n.nid WHERE d.sid IS NULL OR d.reindex <> 0 ORDER BY d.reindex ASC, n.nid ASC", 0, $limit);
+
+  foreach ($result as $node) {
+    $node = node_load($node->nid);
+
+    // Save the changed time of the most recent indexed node, for the search
+    // results half-life calculation.
+    variable_set('node_cron_last', $node->changed);
+
+    // Render the node.
+    node_build_content($node, 'search_index');
+    $node->rendered = drupal_render($node->content);
+
+    $text = '<h1>' . check_plain($node->title) . '</h1>' . $node->rendered;
+
+    // Fetch extra data normally not visible
+    $extra = module_invoke_all('node_update_index', $node);
+    foreach ($extra as $t) {
+      $text .= $t;
+    }
+
+    // Update index
+    search_index($node->nid, 'node', $text);
+  }
+}
+function searchSA(){
+	$form['tab_generale'] = array(
+			'#weight' => 50,
+                	'#title' => t('Elemento date credenziali'),
+                	'#type' => 'hidden',
+                	'#prefix' => '<div id="area_software">',
+                	'#suffix' => '</div>',
+            	);
+	$form['title'] = array(
+		'#type' => 'textfield',
+	      	'#title' => t('Enter words to search only in title field'),
+	      	'#size' => 30,
+	      	'#maxlength' => 255,
+	      	'#ajax' => array(
+                        	'callback' => 'mostra_tab_software',
+                        	'wrapper' => 'area_software',
+                        	'replace' => TRUE,
+     		),
+	);
+	$form['description'] = array(
+		'#type' => 'textfield',
+	      	'#title' => t('Enter words to search only in descripton field'),
+	      	'#size' => 30,
+	      	'#maxlength' => 255,
+	      	'#ajax' => array(
+                        	'callback' => 'mostra_tab_software',
+                        	'wrapper' => 'area_software',
+                        	'replace' => TRUE,
+     		),
+	);
+	$form['author'] = array(
+		'#type' => 'textfield',
+	      	'#title' => t('Enter words to search only in author field'),
+	      	'#size' => 30,
+	      	'#maxlength' => 255,
+	      	'#ajax' => array(
+                        	'callback' => 'mostra_tab_software',
+                        	'wrapper' => 'area_software',
+                        	'replace' => TRUE,
+     		),
+	);
+	$form['other'] = array(
+				'#type' => 'fieldset',
+				'#title' => t('Other'),
+				'#weight' => 1,
+				'#collapsible' => TRUE,
+				'#collapsed' => TRUE,
+	);
+	$form['other']['copyright']= array(
+				'#type' => 'select',
+				'#title' => t('Copyright and Other Restrictions'),
+				'#description'   => t('Please specify if there are copyright or other restrictions applies to the use of the linkable object.'),
+				'#default_value' => isset($node->lom_copyright) ? $node->lom_copyright: '',
+				'#options'   => array(
+					''=>t('Select options'),
+					'yes'=>t('Yes'),
+					'no'=>t('No'),
+				),
+				'#ajax' => array(
+                        			'callback' => 'mostra_tab_software',
+                        			'wrapper' => 'area_software', 
+                        			'replace' => TRUE,
+                    				),
+	);
+	$form['other']['extensions'] = array(
+		'#type' => 'textfield',
+	      	'#title' => t('Insert the software extensions , separeted by a space(Ex. exe txt jpg)'),
+	      	'#size' => 30,
+	      	'#maxlength' => 255,
+	      	'#ajax' => array(
+                        	'callback' => 'mostra_tab_software',
+                        	'wrapper' => 'area_software',
+                        	'replace' => TRUE,
+     		),
+	);
+	$form['other']['version'] = array(
+		'#type' => 'textfield',
+	      	'#title' => t('Version of the software'),
+	      	'#size' => 30,
+	      	'#maxlength' => 255,
+	      	'#ajax' => array(
+                        	'callback' => 'mostra_tab_software',
+                        	'wrapper' => 'area_software',
+                        	'replace' => TRUE,
+     		),
+	);
+	$options = array(
+  		'Windows' => t('Windows'),
+  		'Mac' => t('Mac Os X'),
+  		'Linux' => t('Linux'),
+  		'Android' => t('Android'),
+  		'OtherOS' => t('Other OS'),
+  	);
+	$form['other']['Sop'] = array(
+		'#title'=>t('Operating Systems'),
+  		'#type' => 'checkboxes',
+  		'#description'=>t('The Operating systems where the software can be installed'),
+  		'#options'=>$options,
+	      	'#ajax' => array(
+                        	'callback' => 'mostra_tab_software',
+                        	'wrapper' => 'area_software',
+                        	'replace' => TRUE,
+     		),
+	);
+	$form['other']['rightDesc'] = array(
+		'#type' => 'textfield',
+	      	'#title' => t('Insert a other description'),
+	      	'#size' => 30,
+	      	'#maxlength' => 255,
+	      	'#ajax' => array(
+                        	'callback' => 'mostra_tab_software',
+                        	'wrapper' => 'area_software',
+                        	'replace' => TRUE,
+     		),
+	);	
+return $form;
+}
+//implementation of hook_form_alter
+function searchLO_form() {
+		
+		$form['keywords'] = array(
+	      		'#type' => 'textfield',
+	      		'#title' => t('Enter words to search only in keywords field'),
+	      		'#size' => 30,
+	      		'#maxlength' => 255,
+	      		'#ajax' => array(
+                        	'callback' => 'mostra_tab_elementi',
+                        	'wrapper' => 'area_oggetti',
+                        	'replace' => TRUE,
+     			),
+	    	);
+		$form['phrase'] = array(
+	      		'#type' => 'textfield',
+	      		'#title' => t('Enter words to search only in title and description field'),
+	      		'#size' => 30,
+	      		'#maxlength' => 255,
+	      		'#ajax' => array(
+                        	'callback' => 'mostra_tab_elementi',
+                        	'wrapper' => 'area_oggetti',
+                        	'replace' => TRUE,
+     			),
+	    	);
+		
+		$form['author']= array(
+			'#type' => 'textfield',
+			'#title' => t('Authors'),
+			'#required' => FALSE,
+			'#description' => t('Enter the author(s) of the element'),
+			'#ajax' => array(
+                        	'callback' => 'mostra_tab_elementi',
+                        	'wrapper' => 'area_oggetti',
+                        	'replace' => TRUE,
+     			),
+		);
+		$form['tabella_generale'] = array(
+			'#weight' => 50,
+                	'#title' => t('Elemento date credenziali'),
+                	'#type' => 'hidden',
+                	'#prefix' => '<div id="area_oggetti">',
+                	'#suffix' => '</div>',
+            	);
+		$tassonomia = taxonomy_vocabulary_get_names();//prende i valori da taxonomy_vocabulary(mathematichs e chemistry)
+        	foreach ($tassonomia as $rec) {
+            		$vid = $rec->vid;
+            		$array_val = array('0' => '--none--');
+            		$tree = taxonomy_get_tree($vid);//prende i valori da taxonomy term data (categorie appartenenti prima a vid=26 e vid=27)
+            		foreach ($tree as $res) {
+                		$key = $res->tid;
+                		$value = $res->name;
+                		$array_val[$key] = $value;
+                		$vid = $rec->vid;
+                		$nome = $rec->name;
+            		}
+            		foreach ($tree as $key => $value) {
+                		$form [$value->vid] = array(
+                    			'#type' => 'select',
+                    			'#title' => $rec->name,
+                    			'#options' => $array_val, 
+                    			'#default_value' => t("select a category"),
+                    			'#ajax' => array(
+                        			'callback' => 'mostra_tab_elementi',
+                        			'wrapper' => 'area_oggetti', 
+                        			'replace' => TRUE,
+                    			),
+                		);
+            		}
+			$form['elementi'] = array(
+                		'#title' => t('Risultato dell\'elaborazione'),
+                		'#type' => 'hidden',
+                		'#prefix' => '<div id="area_elementi">',
+                		'#suffix' => '</div>',
+            		);	
+			$form['other'] = array(
+				'#type' => 'fieldset',
+				'#title' => t('Other'),
+				'#weight' => 1,
+				'#collapsible' => TRUE,
+				'#collapsed' => TRUE,
+			);
+			$form['other']['lom_general'] = array(
+				'#type' => 'fieldset',
+				'#title' => t('General'),
+				'#collapsible' => TRUE,
+				'#collapsed' => FALSE,
+			);	  
+			$form['other']['lom_general']['lom_aggregation'] = array(
+				'#type'          => 'select',
+				'#title'         => t('Aggregation'),
+				'#description'   => t('Please select the aggregation level of the linkable object.'),
+				'#default_value' => isset($node->lom_aggregation) ? $node->lom_aggregation : '',
+				'#options'       => array(
+					0 => t('Select options'),
+					1 => t('Raw data'),
+					2 => t('Lesson'),
+					3 => t('Course'),
+					4 => t('Set of courses')
+				),
+				'#prefix' => '<div id="aggreg_select">',
+				'#suffix' => '</div>',
+				'#ajax' => array(
+                        			'callback' => 'mostra_tab_elementi',
+                        			'wrapper' => 'area_oggetti', 
+                        			'replace' => TRUE,
+                    				),
+			);
+			$form['other']['educational'] = array(
+				'#type' => 'fieldset',
+				'#title' => t('Educational'),
+				'#weight' => 1,
+				'#collapsible' => TRUE,
+				'#collapsed' => FALSE,
+			);	
+			$form['other']['educational']['lom_learning_resource_type']= array(
+				'#type' => 'select',
+				'#title' => t('Learning Resource Type'),
+				'#default_value' =>'',
+				'#description' => t('Please specify the kind of linkable object.'),
+				'#options'     => array(
+						''=>t('Select options'),
+					'exercise'=>t('Exercise'),
+					'simulation'=>t('Simulation'),
+					'questionnaire'=>t('Questionnaire'),
+					'diagram'=>t('Diagram'),
+					'figure'=>t('Figure'),
+					'graph'=>t('Graph'),
+					'index'=>t('Index'),
+					'slide'=>t('Slide'),
+					'table'=>t('Table'),
+					'narrative text'=>t('Narrative Text'),
+					'exam'=>t('Exam'),
+					'experiment'=>t('Experiment'),
+					'problem statement'=>t('Problem Statement'),
+					'self assessment'=>t('Self Assessment'),
+					'lecture'=>t('Lecture'),
+				),
+				'#ajax' => array(
+                        			'callback' => 'mostra_tab_elementi',
+                        			'wrapper' => 'area_oggetti', 
+                        			'replace' => TRUE,
+                    				),
+			);	
+			$form['other']['educational']['lom_intended_end_user_role']= array(
+				'#type' => 'select',
+				'#title' => t('Intended End User Role'),
+				'#default_value' => isset($node->lom_intended_end_user_role) ? $node->lom_intended_end_user_role : '',
+				'#description' => t('Please specify the principal users for which this linkable object is designed.'),
+				'#options'     => array(
+					''=>t('Select options'),
+					'teacher'=>t('Teacher'),
+					'author'=>t('Author'),
+					'learner'=>t('Learner'),
+					'manager'=>t('Manager'),
+				),
+				'#ajax' => array(
+                        			'callback' => 'mostra_tab_elementi',
+                        			'wrapper' => 'area_oggetti', 
+                        			'replace' => TRUE,
+                    				),
+			);	
+			$form['other']['educational']['lom_context']= array(
+				'#type' => 'select',
+				'#title' => t('Context'),
+				'#default_value' => isset($node->lom_context) ? $node->lom_context : '',
+				'#description' => t('Please specify the principal environment within which the learning and the use of the linkable object is intended to take place.'),
+				'#options'    => array(
+					''=>t('Select options'),
+					'school'=>t('School'),
+					'higher education'=>t('Higher Education'),
+					'training'=>t('Training'),
+					'other'=>t('Other'),
+				),
+				'#ajax' => array(
+                        			'callback' => 'mostra_tab_elementi',
+                        			'wrapper' => 'area_oggetti', 
+                        			'replace' => TRUE,
+                    				),
+			);	
+			$form['other']['educational']['lom_difficulty']= array(
+				'#type' => 'select',
+				'#title' => t('Difficulty'),
+				'#default_value' => isset($node->lom_difficulty) ? $node->lom_difficulty: '',
+				'#description' => t('Please specify how hard is to work with or through this linkable object.'),
+				'#options'       => array(
+					''=>t('Select options'),
+					'very easy'=>t('Very Easy'),
+					'easy'=>t('Easy'),
+					'medium'=>t('Medium'),
+					'difficult'=>t('Difficult'),
+					'very ifficult'=>t('Very Difficult'),
+				),
+				'#ajax' => array(
+                        			'callback' => 'mostra_tab_elementi',
+                        			'wrapper' => 'area_oggetti', 
+                        			'replace' => TRUE,
+                    				),
+			);	
+			$form['other']['lom_rights'] = array(
+				'#type' => 'fieldset',
+				'#title' => t('Rights'),
+				'#collapsible' => TRUE,
+				'#collapsed' => FALSE,
+			);
+			$form['other']['lom_rights']['lom_copyright']= array(
+				'#type' => 'select',
+				'#title' => t('Copyright and Other Restrictions'),
+				'#description'   => t('Please specify if there are copyright or other restrictions applies to the use of the linkable object.'),
+				'#default_value' => isset($node->lom_copyright) ? $node->lom_copyright: '',
+				'#options'   => array(
+					''=>t('Select options'),
+					'yes'=>t('Yes'),
+					'no'=>t('No'),
+				),
+				'#ajax' => array(
+                        			'callback' => 'mostra_tab_elementi',
+                        			'wrapper' => 'area_oggetti', 
+                        			'replace' => TRUE,
+                    				),
+			);		
+		}
+return $form;
+}
+function searchCombine(){//crea tutta la ricerca per il SA e LO combinati
+	$form['tab_generale'] = array(
+			'#weight' => 50,
+                	'#title' => t('Elemento date credenziali'),
+                	'#type' => 'hidden',
+                	'#prefix' => '<div id="area_softwareLO">',
+                	'#suffix' => '</div>',
+            	);
+	$form['title'] = array(
+		'#type' => 'textfield',
+	      	'#title' => t('Enter title of Software Attachment'),
+	      	'#size' => 30,
+	      	'#maxlength' => 255,
+	      	'#ajax' => array(
+                        	'callback' => 'mostra_tab_softwareLO',
+                        	'wrapper' => 'area_softwareLO',
+                        	'replace' => TRUE,
+     		),
+	);
+	return $form;
+}	
+	
+	
+	function _searchLO_comma_sanitize($string,$uppercase=true) {
+	
+	if ($uppercase) {
+		return trim(strtoupper(preg_replace(array('/(\s*,+ *)+/','/,+\s*,*$|^,$|,\s+,|^,/'),array(',',''),$string)));
+	}
+	else {
+		return trim(preg_replace(array('/(\s*,+ *)+/','/,+\s*,*$|^,$|,\s+,|^,/'),array(',',''),$string));
+	}
+	
+
+}
+
+function estrai_testo($text) {
+
+
+    $stopwords = file_get_contents($_SERVER['DOCUMENT_ROOT'] . base_path() . drupal_get_path('module', 'searchLO') . '/stopwords.txt');
+
+
+
+    $arraystopwords = explode(' ', $stopwords);
+
+    $keys = explode(' ', $text); //estrazione delle parole chiave dal testo   
+    $arrayResult = array_diff($keys, $arraystopwords); //rimozione delle stopWord contenute in $text                                             
+    $arrayResult = array_unique($arrayResult); //rimuove i termini duplicati
+
+    if (in_array("", $arrayResult))
+        unset($arrayResult[array_search("", $arrayResult)]); //rimuove la parola chiave vuota
+
+
+    sort($arrayResult); //esegue il sort dell'array ottenuto
+
+    return $arrayResult;
+}
+
+function check_tidSingle($t, $hint) {
+    if ($t > 0) {
+        if ($t == $hint[0]) {
+            $msg = '<font color="00AA00">The selected category <b>' . prendi_category($t) . '</b> is correct</b></font></br>';
+        } else {
+            $msg = '<font color="#FF7700"><i>The category selected: <b>' . prendi_category($t) . '</b> does not match what suggested.</br>
+  You are invited to use other synonyms more specific in your description in order to enable a correct cataloging or change your selection.</font></br>';
+        }
+    }
+    return $msg;
+}
+
+function check_tidMulti($t, $hint) {
+    if ($t > 0) {
+        $msg = '<font color="#FF7700"><i><b>The category selected: <b>' . prendi_category($t) . '</b> does not match what suggested. </b></br>
+  You are invited to use other synonyms more specific in your description in order to enable a correct cataloging or change your selection.</font></br>';
+        foreach ($hint as $h) {
+            if ($t == $h) {
+                $msg = '<font color="#bb8800"><i>The category selected: <b>' . prendi_category($t) . '</b> is <b>valid, but is not unique</b>. </br>
+  You are invited to add other synonyms more specific in order to enable a correct cataloging.</br></i></font>';
+            }
+        }
+    }
+    return $msg;
+}
+
+function elimina_StopKeyWords($text) {
+
+    $aText = extract_KeyWords($text);
+    $text = "";
+    for ($i = 0; $i < count($aText); $i++)
+        $text .= $aText[$i] . " ";
+    $text = trim($text);
+
+    return $text;
+}
+function mostra_tab_softwareLO($form, &$form_state) {
+    $output = ricerca_combinata();
+    return '<div id="area_softwareLO">' . $output . '</div>';
+}
+function ricerca_combinata(){
+	$result=array();
+	$ret = array(
+        'message' => '',
+    	);
+//parte del learning object
+	$title=$_POST['title'];
+	$ret = mostra_tabellaSA_LO($title);
+	$elements_suggested='';
+	$message='';
+	$message.=$ret['message'];
+	if (strlen($message) > 0)
+        	$elements_suggested = $message;
+    	else
+        	$elements_suggested = "<font color='ff0000'>Title not found. </font>";
+
+    	return $elements_suggested;
+}
+function mostra_tabellaSA_LO($title){
+	$qtit="SELECT DISTINCT s1.Name as titoloSA from field_data_sa_references f1 
+		LEFT JOIN SA_softwareUpload s1 ON f1.sa_references_target_id=s1.Id_Sa";
+	if (is_array($title))
+        	$title = serialize($title);
+	if (strlen($title) > 0) {
+		$testo1 = strtolower($title);
+		$testo1 = preg_replace("/[^A-Za-z0-9 ]/", " ", $testo1);
+		$arrayKeyWords = estrai_testo($testo1);
+        	$arrayKeyWords = array_unique($arrayKeyWords);
+		$chiavi=array();
+		$sub="";
+		
+		foreach ($arrayKeyWords as $tit) {
+			$sub .= "s1.Name like '%".$tit."%' or ";
+			
+        	}
+		$sub = substr($sub, 0, strlen($sub) - 3);
+		$qtit="" . $qtit . " where " . $sub . "";
+			
+	}
+	$array = array();
+	$resultTit=db_query($qtit,$array);
+	foreach($resultTit as $titSA){//per ogni titolo del software
+		$query="SELECT g1.Title as titoloLO, g1.Description as descrizioneLO, g1.Id_Lo as lid from LO_General g1 
+			LEFT JOIN field_data_sa_references f1 ON g1.Id_Lo=f1.entity_id 
+			LEFT JOIN SA_softwareUpload s1 ON f1.sa_references_target_id=s1.Id_Sa 
+			where s1.Name like '%".$titSA->titoloSA."%'";
+		$lo_collegati=db_query($query);
+			$message .= "<br>Learning object connected to <b>".$titSA->titoloSA."</b></br>";
+			$message .= ' 
+				<table>
+					<tr>
+						<th>LOTitle</th>
+						<th>Description</th>
+					</tr>';
+		
+			foreach($lo_collegati as $rec){
+				#$message.="<tr><td><font color=”#008F00”>".l(t($rec->titoloLO),
+				#	'http://localhost/glorep2/?q=node/'. $rec->lid .'')."</font></td>
+				#	<td><font color=”#008F00”>".$rec->descrizioneLO."</font></td></tr>";
+				$message.="<tr><td><font color=”#008F00”>".l(t($rec->titoloLO),'/node/'. $rec->lid .'')."</font></td>
+					<td><font color=”#008F00”>".$rec->descrizioneLO."</font></td></tr>";
+			
+			}
+			
+			$message.='</table>';
+	}
+		
+		
+    		
+		
+    //drupal_set_message('message '.$message,'warning');
+    $ret['message'] .= $message;
+    //drupal_set_message(print_r($ret,true));
+    return $ret;		
+}
+	
+function ricerca_avanzata_SA(){
+	$result=array();
+	$ret = array(
+        'message' => '',
+    	);
+	//parte del software attachment
+	$titolo=$_POST['title'];
+	$description=$_POST['description'];
+	$author=$_POST['author'];
+	$copyright=$_POST['copyright'];
+	$extension=$_POST['extensions'];
+	$version=$_POST['version'];
+	$Sop=$_POST['Sop'];
+	$rightDesc=$_POST['rightDesc'];
+	$ret = mostra_elem_software($titolo,$description,$author,$copyright,$extension,$version,$Sop,$rightDesc);
+	$elements_suggested='';
+	$message='';
+	$message.=$ret['message'];
+	if (strlen($message) > 0)
+        	$elements_suggested = $message;
+    	else
+        	$elements_suggested = "<font color='ff0000'>Sorry, no elements suggested  </font>";
+
+    	return $elements_suggested;
+}
+function mostra_elem_software($title,$description,$author,$copyright,$extension,$version,$Sop,$rightDesc){
+	$query="SELECT m1.Id_Sa as sid, m1.Name as nome,m1.SA_Description as description,m1.Authors as author,m1.Version as versione,m1.OpSystem as sistemaOp from {SA_softwareUpload} m1";
+	if (is_array($titolo))
+        	$titolo = serialize($titolo);
+	if (strlen($title) > 0){
+		$testo1 = strtolower($title);
+		$testo1 = preg_replace("/[^A-Za-z0-9 ]/", " ", $testo1);
+		$arrayTitoli = estrai_testo($testo1);
+		$arrayTitoli = array_unique($arrayTitoli);
+		$autori=array();
+		foreach($arrayTitoli as $tit) {		
+			$titles[] .= "%" . $tit . "%";
+			$sub1 .= "m1.Name like '%" . $tit . "%' or ";
+		}
+		$sub1 = substr($sub1, 0, strlen($sub1) - 3);
+		$sub1 = "". $sub1 ." )";
+		if(strpos($query,'where')==false)
+		{
+			$query1="" . $query . " where (";
+			//where  AND p1.Entity like '% :autore %'
+		}
+		else
+		{
+			$query1="" . $query . " and (";//aggiungo le parentesi altrimenti non concatene gli or e gli and
+		}
+		$query="". $query1 . " " . $sub1 . "";
+	}
+	if (strlen($description) > 0) {
+		$testo2 = strtolower($description);
+		$testo2 = preg_replace("/[^A-Za-z0-9 ]/", " ", $testo2);
+		$arrayDesc = estrai_testo($testo2);
+		$nKeys = count($arrayDesc);
+		foreach ($arrayDesc as $key => $word) {
+            		$r = get_singular($word);
+            		if ($r['s1'] != NULL) {
+                		$arrayDesc[] = $r['s1'];
+            		}
+            		if ($r['s2'] != NULL) {
+                		$arrayDesc[] = $r['s2'];
+            		}
+            		$r = get_plur($word);
+            		if ($r['s1'] != NULL) {
+                		$arrayDesc[] = $r['s1'];
+           		}
+            		if ($r['s2'] != NULL) {
+                		$arrayDesc[] = $r['s2'];
+            		}
+        	}//non cerco i plurali degli autori perchè saranno nomi propri quindi nn mi serve
+        	$arrayDesc = array_unique($arrayDesc);
+		$chiavi=array();
+		$sub="";
+		
+		foreach ($arrayDesc as $key) {
+            		$chiavi[] .= "%" . $key . "%";
+			$sub2 .= "m1.SA_Description like '%".$key."%' or ";
+        	}
+		$sub2 = substr($sub2, 0, strlen($sub2) - 3);
+		$sub2 = "". $sub2 ." )";
+		if(strpos($query,'where')==false)
+		{
+			$query2="". $query . " where (";
+		}
+		else
+		{
+			$query2="". $query . " and (";
+		}
+		$query="" . $query2 . " " . $sub2 . "";
+			
+	}
+	if (strlen($author) > 0){
+		$testo3 = strtolower($author);
+		$testo3 = preg_replace("/[^A-Za-z0-9 ]/", " ", $testo3);
+		$arrayAuthors = estrai_testo($testo3);
+		$arrayAuthors = array_unique($arrayAuthors);
+		$autori=array();
+		foreach($arrayAuthors as $autore) {		
+			$autori[] .= "%" . $autore . "%";
+			$sub3 .= "m1.Authors like '%" . $autore . "%' or ";
+		}
+		$sub3 = substr($sub3, 0, strlen($sub3) - 3);
+		$sub3 = "". $sub3 ." )";
+		if(strpos($query,'where')==false)
+		{
+			$query3="" . $query . " where (";
+			//where  AND p1.Entity like '% :autore %'
+		}
+		else
+		{
+			$query3="" . $query . " and (";//aggiungo le parentesi altrimenti non concatene gli or e gli and
+		}
+		$query="". $query3 . " " . $sub3 . "";
+	}
+	if (!empty($copyright)){
+		if(strpos($query,'where')==false)
+		{
+			$query4="" . $query . " where (";
+			//where  AND p1.Entity like '% :autore %'
+		}
+		else
+		{
+			$query4="" . $query . " and (";
+		}
+		$query="". $query4 . " m1.Copyright like '%" . $copyright . "%')";//non legge la colonna Copyright
+	}
+	if (strlen($extension) > 0){
+		$testo4 = strtolower($extension);
+		$testo4 = preg_replace("/[^A-Za-z0-9 ]/", " ", $testo4);
+		$arrayExt = estrai_testo($testo4);
+		$arrayExt = array_unique($arrayExt);
+		$autori=array();
+		foreach($arrayExt as $ext) {		
+			$extensions[] .= "%" . $ext . "%";
+			$sub4 .= "m1.Extensions like '%" . $ext . "%' or ";
+		}
+		$sub4 = substr($sub4, 0, strlen($sub4) - 3);
+		$sub4 = "". $sub4 ." )";
+		if(strpos($query,'where')==false)
+		{
+			$query5="" . $query . " where (";
+			//where  AND p1.Entity like '% :autore %'
+		}
+		else
+		{
+			$query5="" . $query . " and (";//aggiungo le parentesi altrimenti non concatene gli or e gli and
+		}
+		$query="". $query5 . " " . $sub4 . "";
+	}
+	if (strlen($version) > 0){
+		$testo5 = strtolower($version);
+		$testo5 = preg_replace("/[^A-Za-z0-9 ]/", " ", $testo5);
+		$arrayVrs = estrai_testo($testo5);
+		$arrayVrs = array_unique($arrayVrs);
+		$autori=array();
+		foreach($arrayVrs as $vrs) {		
+			$versions[] .= "%" . $vrs . "%";
+			$sub5 .= "m1.Version like '%" . $vrs . "%' or ";
+		}
+		$sub5 = substr($sub5, 0, strlen($sub5) - 3);
+		$sub5 = "". $sub5 ." )";
+		if(strpos($query,'where')==false)
+		{
+			$query6="" . $query . " where (";
+			//where  AND p1.Entity like '% :autore %'
+		}
+		else
+		{
+			$query6="" . $query . " and (";//aggiungo le parentesi altrimenti non concatene gli or e gli and
+		}
+		$query="". $query6 . " " . $sub5 . "";
+	}
+	if (!empty($Sop)){
+		foreach($Sop as $sistOp) {		
+			$Sops[] .= "%" . $sistOp . "%";
+			$sub6 .= "m1.OpSystem like '%" . $sistOp . "%' or ";
+		}
+		$sub6 = substr($sub6, 0, strlen($sub6) - 3);
+		$sub6 = "". $sub6 ." )";
+		if(strpos($query,'where')==false)
+		{
+			$query7="" . $query . " where (";
+			//where  AND p1.Entity like '% :autore %'
+		}
+		else
+		{
+			$query7="" . $query . " and (";//aggiungo le parentesi altrimenti non concatene gli or e gli and
+		}
+		$query="". $query7 . " " . $sub6 . "";
+	}
+	if (strlen($rightDesc) > 0) {
+		$testo6 = strtolower($rightDesc);
+		$testo6 = preg_replace("/[^A-Za-z0-9 ]/", " ", $testo6);
+		$arrayDesc = estrai_testo($testo6);
+		foreach ($arrayDesc as $key => $word) {
+            		$r = get_singular($word);
+            		if ($r['s1'] != NULL) {
+                		$arrayDesc[] = $r['s1'];
+            		}
+            		if ($r['s2'] != NULL) {
+                		$arrayDesc[] = $r['s2'];
+            		}
+            		$r = get_plur($word);
+            		if ($r['s1'] != NULL) {
+                		$arrayDesc[] = $r['s1'];
+           		}
+            		if ($r['s2'] != NULL) {
+                		$arrayDesc[] = $r['s2'];
+            		}
+        	}//non cerco i plurali degli autori perchè saranno nomi propri quindi nn mi serve
+        	$arrayDesc = array_unique($arrayDesc);
+		$chiavi=array();
+		$sub="";
+		
+		foreach ($arrayDesc as $key) {
+            		$chiavi[] .= "%" . $key . "%";
+			$sub7 .= "m1.rights_Description like '%".$key."%' or ";
+        	}
+		$sub7 = substr($sub7, 0, strlen($sub7) - 3);
+		$sub7 = "". $sub7 ." )";
+		if(strpos($query,'where')==false)
+		{
+			$query8="". $query . " where (";
+		}
+		else
+		{
+			$query8="". $query . " and (";
+		}
+		$query="" . $query8 . " " . $sub7 . "";
+			
+	}
+	$array = array();
+	$result=db_query($query,$array);	
+	$message = '
+	<table>
+		<tr>
+			<th>Title</th>
+			<th>Description</th>
+			<th>Software version</th>
+			<th>Operating system</th>	
+			<th>Author</th>
+		</tr>';
+        foreach ($result as $rec) {
+		#$message.="<tr><td><font color=”#008F00”>".l(t($rec->nome),'http://localhost/glorep2/?q=node/'. $rec->sid .'')."</font></td><td><font color=”#008F00”>" . $rec->description . "</font></td><td><font color=”#008F00”>" . $rec->versione . "</font></td><td><font color=”#008F00”>" . $rec->sistemaOp . "</font></td><td><font color=”#008F00”>" . $rec->author . "</font></td></tr>";
+		$message.="<tr><td><font color=”#008F00”>".l(t($rec->nome),'/node/'. $rec->sid .'')."</font></td><td><font color=”#008F00”>" . $rec->description . "</font></td><td><font color=”#008F00”>" . $rec->versione . "</font></td><td><font color=”#008F00”>" . $rec->sistemaOp . "</font></td><td><font color=”#008F00”>" . $rec->author . "</font></td></tr>";
+    	}
+    $message.='</table>';
+    //drupal_set_message('message '.$message,'warning');
+    $ret['message'] .= $message;
+    //drupal_set_message(print_r($ret,true));
+    return $ret;		
+}
+function ricerca_avanzata_LO(){
+	$result=array();
+	$ret = array(
+        'message' => '',
+    	);
+//parte del learning object
+	$keyword=$_POST['keywords'];
+	$key=$_POST['phrase'];
+	$author=$_POST['author'];
+	$cat1=$_POST['26'];
+	$cat2=$_POST['27'];
+	$type1=$_POST['type[lo]'];
+	$type2=$_POST['type[sa]'];
+	//OTHER//
+	$aggregation=$_POST['lom_aggregation'];
+	$copyright=$_POST['lom_copyright'];
+	$lo_type=$_POST['lom_learning_resource_type'];
+	$user_role=$_POST['lom_intended_end_user_role'];
+	$context=$_POST['lom_context'];
+	$difficulty=$_POST['lom_difficulty'];
+
+	$ret = mostra_tabella($keyword,$key,$author,$cat1,$cat2,$aggregation,$copyright,$lo_type,$user_role,$context,$difficulty);
+	$elements_suggested='';
+	$message='';
+	$message.=$ret['message'];
+	if (strlen($message) > 0)
+        	$elements_suggested = $message;
+    	else
+        	$elements_suggested = "<font color='ff0000'>Sorry, no elements suggested </font>";
+
+    	return $elements_suggested;
+}
+function mostra_tabella($keyword,$chiave,$author,$cat1,$cat2,$aggregation,$copyright,$lo_type,$user_role,$context,$difficulty){
+	$query="SELECT t1.Id_Lo as nid, t1.Title as titolo,t1.Description as descrizione,t1.Keyword as kword,p1.Entity as author,q1.name as category, s1.Name as titoloSA from {LO_General} t1 
+		LEFT JOIN {LO_Contribute} p1 ON t1.Id_Lo=p1.Id_Lo 
+		LEFT JOIN {LO_category} c1 ON t1.Id_Lo=c1.Id_LO LEFT JOIN taxonomy_term_data q1 ON q1.tid=c1.Categoria_LO
+		LEFT JOIN LO_Rights x1 ON t1.Id_Lo=x1.Id_Lo
+		LEFT JOIN LO_Educational e1 ON t1.Id_Lo=e1.Id_Lo
+		LEFT JOIN field_data_sa_references g1 ON t1.Id_Lo=g1.entity_id LEFT JOIN SA_softwareUpload s1 ON Id_Sa=sa_references_target_id";
+	
+	if (is_array($keyword))
+        	$keyword = serialize($keyword);
+	if (is_array($chiave))
+        	$chiave = serialize($chiave);
+	if (is_array($author))
+        	$author = serialize($author);
+	
+	if (strlen($keyword) > 0) {
+		$testo0 = strtolower($keyword);
+		$testo0 = preg_replace("/[^A-Za-z0-9 ]/", " ", $testo0);
+		$arrayKWords = estrai_testo($testo0);
+		$numberKey = count($arrayKWords);
+		foreach ($arrayKWords as $key => $word0) {
+            		$r = get_singular($word0);
+            		if ($r['s1'] != NULL) {
+                		$arrayKWords[] = $r['s1'];
+            		}
+            		if ($r['s2'] != NULL) {
+                		$arrayKWords[] = $r['s2'];
+            		}
+            		$r = get_plur($word0);
+            		if ($r['s1'] != NULL) {
+                		$arrayKWords[] = $r['s1'];
+           		}
+            		if ($r['s2'] != NULL) {
+                		$arrayKWords[] = $r['s2'];
+            		}
+        	}//non cerco i plurali degli autori perchè saranno nomi propri quindi nn mi serve
+        	$arrayKWords = array_unique($arrayKWords);
+		$keys=array();
+		$sub0="";
+		
+		foreach ($arrayKWords as $chiave0) {
+            		$keys[] .= "%" . $chiave0 . "%";
+			$sub0 .= "t1.Keyword like '%".$chiave0."%' or ";
+        	}
+		$sub0 = substr($sub0, 0, strlen($sub0) - 3);
+		$sub0 = "". $sub0 ." )";
+		if(strpos($query,'where')==false)
+		{
+			$query0="". $query . " where (";
+		}
+		else
+		{
+			$query0="". $query . " and (";
+		}
+		$query="" . $query0 . " " . $sub0 . "";
+			
+	}
+	if (strlen($chiave) > 0) {
+		$testo1 = strtolower($chiave);
+		$testo1 = preg_replace("/[^A-Za-z0-9 ]/", " ", $testo1);
+		$arrayKeyWords = estrai_testo($testo1);
+		$nKeys = count($arrayKeyWords);
+		foreach ($arrayKeyWords as $key => $word) {
+            		$r = get_singular($word);
+            		if ($r['s1'] != NULL) {
+                		$arrayKeyWords[] = $r['s1'];
+            		}
+            		if ($r['s2'] != NULL) {
+                		$arrayKeyWords[] = $r['s2'];
+            		}
+            		$r = get_plur($word);
+            		if ($r['s1'] != NULL) {
+                		$arrayKeyWords[] = $r['s1'];
+           		}
+            		if ($r['s2'] != NULL) {
+                		$arrayKeyWords[] = $r['s2'];
+            		}
+        	}//non cerco i plurali degli autori perchè saranno nomi propri quindi nn mi serve
+        	$arrayKeyWords = array_unique($arrayKeyWords);
+		$chiavi=array();
+		$sub="";
+		
+		foreach ($arrayKeyWords as $key) {
+            		$chiavi[] .= "%" . $key . "%";
+			$sub .= "t1.Title like '%".$key."%' or t1.Description like '%".$key."%' or ";
+        	}
+		$sub5 = substr($sub, 0, strlen($sub) - 3);
+		$sub = "". $sub5 ." )";
+		if(strpos($query,'where')==false)
+		{
+			$query1="". $query . " where (";
+		}
+		else
+		{
+			$query1="". $query . " and (";
+		}
+		$query="" . $query1 . " " . $sub . "";
+			
+	}
+	if (strlen($author) > 0){
+		$testo2 = strtolower($author);
+		$testo2 = preg_replace("/[^A-Za-z0-9 ]/", " ", $testo2);
+		$arrayAuthors = estrai_testo($testo2);
+		$arrayAuthors = array_unique($arrayAuthors);
+		$autori=array();
+		foreach($arrayAuthors as $autore) {		
+			$autori[] .= "%" . $autore . "%";
+			$sub1 .= "p1.Entity like '%" . $autore . "%' or ";
+		}
+		$sub1 = substr($sub1, 0, strlen($sub1) - 3);
+		$sub1 = "". $sub1 ." )";
+		if(strpos($query,'where')==false)
+		{
+			$query2="" . $query . " where (";
+			//where  AND p1.Entity like '% :autore %'
+		}
+		else
+		{
+			$query2="" . $query . " and (";//aggiungo le parentesi altrimenti non concatene gli or e gli and
+		}
+		$query="". $query2 . " " . $sub1 . "";
+	}
+	if ($cat1!=0){
+		if(strpos($query,'where')==false)
+		{
+			$query3="" . $query . " where (";
+			//where  AND p1.Entity like '% :autore %'
+		}
+		else
+		{
+			$query3="" . $query . " and (";//aggiungo le parentesi altrimenti non concatene gli or e gli and
+		}
+		$query="". $query3 . " c1.Categoria_LO=".$cat1.")";
+	}
+	if ($cat2!=0){
+		if(strpos($query,'where')==false)
+		{
+			$query8="" . $query . " where (";
+			//where  AND p1.Entity like '% :autore %'
+		}
+		else
+		{
+			$query8="" . $query . " and (";//aggiungo le parentesi altrimenti non concatene gli or e gli and
+		}
+		$query="". $query8 . " c1.Categoria_LO=".$cat2.")";
+	}
+	if (!empty($aggregation)){
+		if(strpos($query,'where')==false)
+		{
+			$query4="" . $query . " where (";
+			//where  AND p1.Entity like '% :autore %'
+		}
+		else
+		{
+			$query4="" . $query . " and (";
+		}
+		$query="". $query4 . " t1.Aggregation_Level like '%" . $aggregation . "%')";
+	}
+	if (!empty($copyright)){
+		if(strpos($query,'where')==false)
+		{
+			$query5="" . $query . " where (";
+			//where  AND p1.Entity like '% :autore %'
+		}
+		else
+		{
+			$query5="" . $query . " and (";
+		}
+		$query="". $query5 . " x1.Copyright like '%" . $copyright . "%')";//non legge la colonna Copyright
+	}
+	if (!empty($lo_type)){
+		if(strpos($query,'where')==false)
+		{
+			$query6="" . $query . " where (";
+			//where  AND p1.Entity like '% :autore %'
+		}
+		else
+		{
+			$query6="" . $query . " and (";
+		}
+		$query="". $query6 . " e1.LearningResourceType like '%" .$lo_type."%')";
+	}
+	if (!empty($user_role)){
+		if(strpos($query,'where')==false)
+		{
+			$query7="" . $query . " where (";
+			//where  AND p1.Entity like '% :autore %'
+		}
+		else
+		{
+			$query7="" . $query . " and (";
+		}
+		$query="". $query7 . " e1.IntendedEndUserRole like '%" .$user_role."%')";
+	}
+	if (!empty($context)){
+		if(strpos($query,'where')==false)
+		{
+			$query9="" . $query . " where (";
+			//where  AND p1.Entity like '% :autore %'
+		}
+		else
+		{
+			$query9="" . $query . " and (";
+		}
+		$query="". $query9 . " e1.Context like '%" .$context."%')";
+	}
+	if (!empty($difficulty)){
+		if(strpos($query,'where')==false)
+		{
+			$query10="" . $query . " where (";
+			//where  AND p1.Entity like '% :autore %'
+		}
+		else
+		{
+			$query10="" . $query . " and (";
+		}
+		$query="". $query10 . " e1.Difficulty like '%" .$difficulty."%')";
+	}
+		
+			
+	//drupal_set_message("ph: ".$query."");
+	$array = array();
+	
+	//$result = db_query($query/*, $array*/);
+	$result=db_query($query,$array);	
+	//drupal_set_message("Query: ".$query."");
+	//drupal_set_message("copyright: ".$copyright."");
+	//drupal_set_message("risultato: ".t($result[0]));
+	$arrayTab = array();
+	$titolo = array();
+	$nRec=0;
+	$message = '
+	<table>
+		<tr>
+			<th>Title</th>
+			<th>Description</th>
+			<th>Category</th>
+			<th>Keyword</th>
+			<th>Author</th>
+			<th>Associated Software</th>
+		</tr>';
+        foreach ($result as $rec) {
+		#$message.="<tr><td><font color=”#008F00”>".l(t($rec->titolo),'http://localhost/glorep2/?q=node/'. $rec->nid .'')."</font></td><td><font color=”#008F00”>" . $rec->descrizione . "</font></td><td><font color=”#008F00”>" . $rec->category . "</font></td><td><font color=”#008F00”>" . $rec->kword . "</font></td><td><font color=”#008F00”>" . $rec->author . "</font></td><td><font color=”#008F00”>" . $rec->titoloSA . "</font></td></tr>";
+		$message.="<tr><td><font color=”#008F00”>".l(t($rec->titolo),'/node/'. $rec->nid .'')."</font></td><td><font color=”#008F00”>" . $rec->descrizione . "</font></td><td><font color=”#008F00”>" . $rec->category . "</font></td><td><font color=”#008F00”>" . $rec->kword . "</font></td><td><font color=”#008F00”>" . $rec->author . "</font></td><td><font color=”#008F00”>" . $rec->titoloSA . "</font></td></tr>";
+    	}
+    $message.='</table>';
+    //drupal_set_message('message '.$message,'warning');
+    $ret['message'] .= $message;
+    //drupal_set_message(print_r($ret,true));
+    return $ret;
+}
+
+function count_Tree($key, $a_Hin) {
+    $hier = prendi_parent($key);
+    $n = "";
+
+    if ($hier['depth'] != 0) {//caso base se il valore di depth = 0
+        if (isset($a_Hin[$hier['parent']]))
+            return $a_Hin[$hier['parent']] + count_Tree($hier['parent'], $a_Hin);
+        else
+            return count_Tree($hier['parent'], $a_Hin);
+    }
+    return 0;
+}
+
+function prendi_parent($tid) {
+    $query = db_select('taxonomy_term_hierarchy', 'T');
+    $query->fields('T', array('parent'))
+            ->fields('D', array('depth'))
+            ->join('dis_cat_terms_depth', 'D', 'T.tid = D.tid');
+    $query->condition('T.tid', $tid, '=');
+}
+
+
+function extract_KeyWords($text) {
+
+
+    $stopwords = file_get_contents($_SERVER['DOCUMENT_ROOT'] . base_path() . drupal_get_path('module', 'tax_assistant') . '/stopwords.txt');
+
+    $arraystopwords = explode(' ', $stopwords);
+
+    $keys = explode(' ', $text); //estrazione delle parole chiave dal testo   
+    $arrayResult = array_diff($keys, $arraystopwords); //rimozione delle stopWord contenute in $text                                             
+    $arrayResult = array_unique($arrayResult); //rimuove i termini duplicati
+
+    if (in_array("", $arrayResult))
+        unset($arrayResult[array_search("", $arrayResult)]); //rimuove la parola chiave vuota
+
+
+    sort($arrayResult); //esegue il sort dell'array ottenuto
+
+    return $arrayResult;
+}
+
+function get_plur($stringa = "", $stringa2 = "") {
+
+    $ultimo = substr($stringa, strlen($stringa) - 1);
+    $penultimo = substr($stringa, strlen($stringa) - 2, 1);
+    if (strlen($stringa) > 0) {
+
+        switch ($ultimo) {
+            case 's':
+                $stringa.="es";
+                break;
+            case 'h':
+                if ($penultimo == 's' || $penultimo == 'c')
+                    $stringa.="es";
+                break;
+            case 'x':
+                $stringa.="es";
+                break;
+            case 'o':
+                if ($penultimo == 'a' || $penultimo == 'e' || $penultimo == 'i' || $penultimo == 'u')
+                    $stringa.="s";
+                else {
+                    $stringa2 = $stringa . "es";
+                    $stringa.="s";
+                }
+                break;
+
+            case 'y':
+                if ($penultimo == 'a' || $penultimo == 'e' || $penultimo == 'i' ||
+                        $penultimo == 'o' || $penultimo == 'u')
+                    $stringa.="s";
+                else
+                    $stringa = substr($stringa, 0, strlen($stringa) - 1) . "ies";
+                break;
+            case 'f':
+                $stringa = substr($stringa, 0, strlen($stringa) - 1) . "ves";
+                break;
+            case 'e':
+                if ($penultimo == 'f')
+                    $stringa = substr($stringa, 0, strlen($stringa) - 2) . 'ves';
+                else
+                    $stringa.='s';
+                break;
+            default:
+
+                if (strlen($stringa) > 0)
+                    $stringa.='s';
+                break;
+        }
+    }
+
+    return array(
+        's1' => $stringa,
+        's2' => $stringa2,
+    );
+}
+
+function get_singular($stringa = "", $stringa2 = "") {
+
+    $ultimo = substr($stringa, strlen($stringa) - 1);
+    $penultimo = substr($stringa, strlen($stringa) - 2, 1);
+    $terzultimo = substr($stringa, strlen($stringa) - 3, 1);
+    if (strlen($stringa) > 0) {
+
+        switch ($ultimo) {
+            case 's':
+                switch ($penultimo) {
+                    case 'e':
+                        if ($terzultimo == 'i')
+                            $stringa = substr($stringa, 0, strlen($stringa) - 3) . 'y';
+                        else if ($terzultimo == 'v') {
+                            $stringa2 = substr($stringa, 0, strlen($stringa) - 3) . 'fe';
+                            $stringa = substr($stringa, 0, strlen($stringa) - 3) . 'f';
+                        } else if ($terzultimo == 's')
+                            $stringa = substr($stringa, 0, strlen($stringa) - 2);
+                        else
+                            $stringa = substr($stringa, 0, strlen($stringa) - 1);
+                        break;
+                    case 'o': {
+
+                            $stringa = substr($stringa, 0, strlen($stringa) - 1);
+                        }
+                        break;
+                    default:
+                        $stringa = substr($stringa, 0, strlen($stringa) - 1);
+                        break;
+                }
+
+                break;
+        }
+    }
+    return array(
+        's1' => $stringa,
+        's2' => $stringa2,
+    );
+}
+
+function mostra_tab_elementi($form, &$form_state) {
+    $output = ricerca_avanzata_LO();
+    return '<div id="area_oggetti">' . $output . '</div>';
+}
+function mostra_tab_software($form, &$form_state) {
+    $output = ricerca_avanzata_SA();
+    return '<div id="area_software">' . $output . '</div>';
+}
+

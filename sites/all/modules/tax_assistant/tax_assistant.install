@@ -1,0 +1,67 @@
+<?php
+
+/**
+ * Implements hook_schema()
+ */
+function tax_assistant_schema()
+{
+//============================= taxonomy_term_synonym ===============================================
+$schema['taxonomy_term_synonym'] = array (
+		'description' => 'Contains special Learning Object properties',
+		'fields' => array (
+			'tsid' => array(
+				'description' => '',
+				'type' => 'serial',
+        			'not null' => TRUE,
+			),
+			'tid' => array(
+				'description' => 'Time for sinc.',
+				'type' => 'int',
+				'unsigned' => true,
+        			'not null' => TRUE,
+        			'default' => 0,
+			),
+			'name'=> array(
+				'description' => '',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 255
+			),
+		),
+	'primary key' => array('tsid'),
+	);
+	return $schema;
+
+$schema['dis_cat_terms_depth'] = array (
+		'description' => 'dis_cat_terms_depth',
+		'fields' => array (
+			'tid' => array(
+				'description' => '',
+				'type' => 'int',
+        			'not null' => TRUE,
+			),
+			'depth' => array(
+				'description' => '',
+				'type' => 'int',
+				
+        			'not null' => TRUE,
+        			
+			),
+			'vid'=> array(
+				'description' => '',
+				'type' => 'int',
+				
+				'not null' => true,
+				
+			),
+		),
+	'primary key' => array('tsid'),
+	);
+	return $schema;
+}
+
+function collabrep_uninstall() {
+
+drupal_uninstall_schema('tax_assistant');
+}

@@ -1,0 +1,816 @@
+<?php
+
+/**
+ * Implements hook_schema()
+ */
+function linkableobject_schema()
+{
+//============================= LO_Federation ===============================================
+$schema['LO_Federation'] = array (
+		'description' => 'Contains special Learning Object properties',
+		'fields' => array (
+			'ServerName' => array(
+				'description' => 'A list of name of federated',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 20
+			),
+			'ServerAddress' => array(
+				'description' => 'A list of federated address',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 250
+			),
+			'N_Lo' => array(
+				'description' => 'Number of Node.',
+				'type' => 'int',
+        			'not null' => TRUE,
+        			'default' => 0,
+			),
+			'TimeUpd' => array(
+				'description' => 'Time for sinc.',
+				'type' => 'int',
+        			'not null' => TRUE,
+        			'default' => 0,
+			),
+		),
+	'unique keys' => array ('ServerName' => array('ServerName')),
+	'primary key' => array ('ServerName')
+	);
+
+//============================= LO_General ===============================================
+	$schema['LO_General'] = array (
+		'description' => 'Contains special Learning Object properties',
+		'fields' => array (
+			'Id_Lo' => array(
+				'description' => 'Refers to a Node Id.',
+				'type' => 'int',
+				'not null' => true,
+				'unsigned' => true
+			),
+			'Id_Fd' => array(
+				'description' => 'A federation-unique ID.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 255
+			),
+			'Title' => array(
+				'description' => 'Title of this Learning Object',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => false,
+				'length' => 1000,
+			),
+			'Language' => array(
+				'description' => 'Language of this learning object.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => false,
+				'length' => 100,
+			),
+			'Description' => array(
+				'description' => 'Description of this Learning Object',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => false,
+				'length' => 2000,
+			),
+			'Keyword' => array(
+				'description' => 'Keyword of this Learning Object',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => false,
+				'length' => 1000,
+			),
+			'Coverage' => array(
+				'description' => 'Coverage of this learning object.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => false,
+				'length' => 1000,
+			),
+          		'Structure' => array(
+              			'description' => 'Structure of this learning object.',
+              			'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => false,
+				'length' => 1000,
+          		),
+			'Aggregation_Level' => array(
+              			'description' => 'Aggregation Level of this learning object.',
+              			'type' => 'int',
+				'size' => 'tiny',
+				'not null' => false,
+          		),
+			'Deleted' => array(
+				'description' => 'set a yes if this learning object is deleted',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'default' => 'no',
+				'length' => 5
+			),
+			'TimeUpd' => array(
+				'description' => 'Time for sinc.',
+				'type' => 'int',
+        			'not null' => TRUE,
+        			'default' => 0,
+			),
+		),
+	'unique keys' => array ('node_id' => array('Id_Lo','Id_Fd')),
+	'primary key' => array ('Id_Lo','Id_Fd')
+	);
+
+//============================= LO_Lifecycle ===============================================
+	$schema['LO_LifeCycle'] = array (
+		'description' => 'Contains the story and the current state of the Learning Object',
+		'fields' => array (
+			'Id_Lo' => array(
+				'description' => 'Refers to a Node Id.',
+				'type' => 'int',
+				'not null' => true,
+				'unsigned' => true
+			),
+			'Id_Fd' => array(
+				'description' => 'A federation-unique ID.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 255
+			),
+			'Version' => array(
+				'description' => 'The version of the Learning Object.',
+				'type' => 'varchar',
+				'not null' => false,
+				'length' => 50
+			),
+			'Status' => array(
+				'description' => 'The status or condition of the Learning Object.',
+				'type' => 'varchar',
+				'not null' => true,
+				'length' => 50
+			),
+		),
+		'unique keys' => array ('Id_Lo' => array('Id_Lo'), 'Id_Fd' => array ('Id_Fd')),
+		'primary key' => array ('Id_Lo','Id_Fd')
+	);
+
+//============================= LO_Metadata ===============================================
+	$schema['LO_Metadata'] = array (
+		'description' => 'The category describes the metadata itself.',
+		'fields' => array (
+			'Id_Lo' => array(
+				'description' => 'Refers to a Node Id.',
+				'type' => 'int',
+				'not null' => true,
+				'unsigned' => true
+			),
+			'Id_Fd' => array(
+				'description' => 'A federation-unique ID.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 255
+			),
+			'MetadataSchema' => array(
+				'description' => 'Name and version of the authoritative specificationused to create this metadata istance.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => false,
+				'length' => 30
+			),
+			'Language' => array(
+				'description' => 'Language of this metadata istance.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => false,
+				'length' => 100
+			),
+		),
+		'unique keys' => array ('Id_Lo' => array('Id_Lo'), 'Id_Fd' => array ('Id_Fd')),
+		'primary key' => array ('Id_Lo','Id_Fd')
+	);
+
+//============================= LO_Contribute ===============================================
+	$schema['LO_Contribute'] = array (
+		'description' => 'Those Entities that have contibuted to the state of this learning object',
+		'fields' => array (
+			'Id_Lo' => array(
+				'description' => 'Refers to a Node Id.',
+				'type' => 'int',
+				'not null' => true,
+				'unsigned' => true
+			),
+			'Id_Fd' => array(
+				'description' => 'A federation-unique ID.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 255
+			),
+			'Role' => array(
+				'description' => 'Kind of contribution.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 50
+			),
+			'Entity' => array(
+				'description' => 'The identification of and information about entities contributing to this learnin object.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => false,
+				'length' => 1000
+			),
+			'Date' => array(
+				'description' => 'The date of contribution.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => false,
+				'length' => 20
+			),
+		),
+		'unique keys' => array ('Id_Lo' => array('Id_Lo'), 'Id_Fd' => array ('Id_Fd')),
+		'primary key' => array ('Id_Lo','Id_Fd')
+	);
+
+//============================= LO_Technical ===============================================
+	$schema['LO_Technical'] = array (
+		'description' => 'Technical requirements and characteristics of the Learning Object.',
+		'fields' => array (
+			'Id_Lo' => array(
+				'description' => 'Refers to a Node Id.',
+				'type' => 'int',
+				'not null' => true,
+				'unsigned' => true
+			),
+			'Id_Fd' => array(
+				'description' => 'A federation-unique ID.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 255
+			),
+			'Format' => array(
+				'description' => 'Technical datatypes of the learning object.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => false,
+				'length' => 40
+			),
+			'Size' => array(
+				'description' => 'The size of the digital learning object in bytes.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => false,
+				'length' => 30
+			),
+			'Location' => array(
+				'description' => 'A string (URI or URL) that is used to access this learning object.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => false,
+				'length' => 1000
+			),
+			'InstallationRemarks' => array(
+				'description' => 'Description of how to install this learning object.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => false,
+				'length' => 1000
+			),
+			'OtherPlatformRequirements' => array(
+				'description' => 'Information about other software and hardware requirements.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => false,
+				'length' => 1000
+			),
+			'Duration' => array(
+				'description' => 'Time a continuous learning object takes when played at intended speed.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => false,
+				'length' => 50
+			),
+		),
+		'unique keys' => array ('Id_Lo' => array('Id_Lo'), 'Id_Fd' => array ('Id_Fd')),
+		'primary key' => array ('Id_Lo','Id_Fd')
+	);
+
+//============================= LO_Requirement ===============================================
+	$schema['LO_Requirement'] = array (
+		'description' => 'Technical capabilities necessary for using this learning object.',
+		'fields' => array (
+			'Id_Lo' => array(
+				'description' => 'Refers to a Node Id.',
+				'type' => 'int',
+				'not null' => true,
+				'unsigned' => true
+			),
+			'Id_Fd' => array(
+				'description' => 'A federation-unique ID.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 255
+			),
+			'Id_Composite' => array(
+				'description' => 'Technology required to use this learning object.',
+				'type' => 'int',
+				'not null' => true,
+				'unsigned' => true
+			),
+		),
+		'unique keys' => array ('Id_Lo' => array('Id_Lo'), 'Id_Fd' => array ('Id_Fd')),
+		'primary key' => array ('Id_Lo','Id_Fd')
+	);
+
+//============================= LO_OrComposite ===============================================
+	$schema['LO_OrComposite'] = array (
+		'description' => 'Technical capabilities necessary for using this learning object.',
+		'fields' => array (
+			'Id_Composite' => array(
+				'description' => 'Refers to a Node Id.',
+				'type' => 'int',
+				'not null' => true,
+				'unsigned' => true
+			),
+			'Type' => array(
+				'description' => 'Technology required to use this learning object.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => false,
+				'length' => 1000
+			),
+			'Name' => array(
+				'description' => 'Name of the required technology to use this learning object.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => false,
+				'length' => 1000
+			),
+			'MinimumVersion' => array(
+				'description' => 'Lowest possible version of the required technology to use this learning object.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => false,
+				'length' => 30
+			),
+			'MaximumVersion' => array(
+				'description' => 'Highest possible version of the required technology to use this learning object.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => false,
+				'length' => 30
+			),
+		),
+		'unique keys' => array ('Id_Composite' => array('Id_Composite')),
+		'primary key' => array ('Id_Composite')
+	);
+	$schema['LO_category']=array(
+		'description' => 'Technical capabilities necessary for using this learning object.',
+		'fields' => array (
+			'Id_LO' => array(
+				'description' => 'Refers to a Node Id.',
+				'type' => 'int',
+				'not null' => true,
+				'unsigned' => true
+			),
+			'Categoria_LO'=>array(
+				'description'=>'Refers to the category',
+				'type'=>'int',
+				'not null'=>true,
+			),
+			'Id_Fd' => array(
+				'description' => 'A federation-unique ID.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 255
+			),
+		),
+	);
+//============================= LO_Educational ===============================================
+	$schema['LO_Educational'] = array (
+		'description' => 'Technical capabilities necessary for using this learning object.',
+		'fields' => array (
+			'Id_Lo' => array(
+				'description' => 'Refers to a Node Id.',
+				'type' => 'int',
+				'not null' => true,
+				'unsigned' => true
+			),
+			'Id_Fd' => array(
+				'description' => 'A federation-unique ID.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 255
+			),
+			'InteractivityType' => array(
+				'description' => 'Predominant mode of learning supported by this learning object.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 200
+			),
+			'LearningResourceType' => array(
+				'description' => 'Specific kind of learning object.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 200
+			),
+			'InteractivityLevel' => array(
+				'description' => 'The degree of interactivity characterizing this learning object.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 200
+			),
+			'SemanticDensity' => array(
+				'description' => 'The degree of concisness of a learning object.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 200
+			),
+			'IntendedEndUserRole' => array(
+				'description' => 'Principal users for which this learning object was designed.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 200
+			),
+			'Context' => array(
+				'description' => 'The principal environment within which the learning and use of this learning object intended to take place.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 200
+			),
+			'TypicalAgeRange' => array(
+				'description' => 'Age of the typical intended user.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => false,
+				'length' => 1000
+			),
+			'Difficulty' => array(
+				'description' => 'How hard it is to work with this learning object.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 200
+			),
+			'TypicalLearningTime' => array(
+				'description' => 'Time takes to work with this learning object.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => false,
+				'length' => 50
+			),
+			'edu_Description' => array(
+				'description' => 'Comments on how this learning object is to be used.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => false,
+				'length' => 1000
+			),
+			'edu_Language' => array(
+				'description' => 'The language used by the typical intended user.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => false,
+				'length' => 100
+			),
+		),
+		'unique keys' => array ('Id_Lo' => array('Id_Lo'), 'Id_Fd' => array ('Id_Fd')),
+		'primary key' => array ('Id_Lo','Id_Fd')
+	);
+
+//============================= LO_Rights ===============================================
+	$schema['LO_Rights'] = array (
+		'description' => 'Intellectual property rights and condition for use this learning object.',
+		'fields' => array (
+			'Id_Lo' => array(
+				'description' => 'Refers to a Node Id.',
+				'type' => 'int',
+				'not null' => true,
+				'unsigned' => true
+			),
+			'Id_Fd' => array(
+				'description' => 'A federation-unique ID.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 255
+			),
+			'Cost' => array(
+				'description' => 'Whether use of this learning object requires payment.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 5
+			),
+			'Copyright' => array(
+				'description' => 'Whether copyright or other restriction apply to the use of this learning object.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 5
+			),
+			'rights_Description' => array(
+				'description' => 'Comments on the conditions of use of this learning object.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 1000
+			),
+		),
+		'unique keys' => array ('Id_Lo' => array('Id_Lo'), 'Id_Fd' => array ('Id_Fd')),
+		'primary key' => array ('Id_Lo','Id_Fd')
+	);
+
+
+//============================= LO_Identifier ===============================================
+	$schema['LO_Identifier'] = array (
+		'description' => 'a globally unique label that identifies the target learning object',
+		'fields' => array (
+			'Id_Identifier' => array(
+				'description' => 'A globally unique refers to a learning object.',
+				'type' => 'int',
+				'not null' => true,
+				'unsigned' => true
+			),
+			'Id_Lo' => array(
+				'description' => 'Refers to a Node Id.',
+				'type' => 'int',
+				'not null' => true,
+				'unsigned' => true
+			),
+			'Id_Fd' => array(
+				'description' => 'A federation-unique ID.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 255
+			),
+			'Catalog' => array(
+				'description' => 'The name or designator of the identifications or cataloging scheme for this entry. A namespace scheme.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 1000
+			),
+			'Entry' => array(
+				'description' => 'The value of the identifier within the identification or cataloging scheme that designates or identifies the target learning object. A namespace specific string.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 1000
+			),
+			'TimeUpd' => array(
+				'description' => 'Time for sinc.',
+				'type' => 'int',
+        			'not null' => TRUE,
+        			'default' => 0,
+			),
+		),
+		'unique keys' => array ('Id_Identifier' => array('Id_Identifier')),
+		'primary key' => array ('Id_Identifier')
+	);
+
+//============================= LO_Relation ===============================================
+	$schema['LO_Relation'] = array (
+		'description' => 'a globally unique label that identifies the target learning object',
+		'fields' => array (
+			'Id_Lo' => array(
+				'description' => 'Refers to a Node Id.',
+				'type' => 'int',
+				'not null' => true,
+				'unsigned' => true
+			),
+			'Id_Fd' => array(
+				'description' => 'A federation-unique ID.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 255
+			),
+			'kind' => array(
+				'description' => 'Describe the nature of the relationship between this learning object and the target learning object',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 200
+			),
+			'Id_Target' => array(
+				'description' => 'A globally unique refers to a learning object.',
+				'type' => 'int',
+				'not null' => true,
+				'unsigned' => true
+			),
+			'TimeUpd' => array(
+				'description' => 'Time for sinc.',
+				'type' => 'int',
+        			'not null' => TRUE,
+        			'default' => 0,
+			),
+		),
+		'unique keys' => array ('Id_Target' => array('Id_Target'), 'Id_Lo' => array ('Id_Lo'), 'Id_Fd' => array ('Id_Fd')),
+		'primary key' => array ('Id_Target','Id_Lo','Id_Fd')
+	);
+
+		//============================= LO_File ===============================================
+	$schema['LO_File'] = array (
+		'description' => 'Learning Object files',
+		'fields' => array (
+			'Id_Fd' => array(
+				'description' => 'A federation-unique ID.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 255
+			),
+			'url' => array(
+				'description' => 'The server path where the file is located.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 255
+			),
+			'filename' => array(
+				'description' => 'Name of the file.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 255
+			),
+			'filesize' => array(
+				'description' => 'Size of the file.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 255
+			),
+			'filemime' => array(
+				'description' => 'Name of the file.',
+				'type' => 'varchar',
+				'size' => 'normal',
+				'not null' => true,
+				'length' => 255
+			),
+			),
+		'unique keys' => array ('Id_Fd' => array('Id_Fd')),
+		'primary key' => array('Id_Fd')
+	);
+
+		$name=variable_get('site_name', '0');
+		variable_set('collabrep_my_name',$name);
+		variable_set('collabrep_federation_status','0');
+		variable_set('collabrep_bootstrap_address',NULL);
+		variable_set('collabrep_bootstrap_id',NULL);
+		variable_set('collabrep_db_address',NULL);
+		variable_set('collabrep_db_url',NULL);
+		variable_set('collabrep_federation_password',NULL);
+		variable_set('collabrep_login_password',NULL);
+		variable_set('collabrep_login_user',NULL);
+		variable_set('collabrep_federation_name','NOFEDERATION');
+		variable_set('file_private_path','sites/default/files/collabrep/');
+	return $schema;
+}
+
+function linkableobject_uninstall(){
+	  $sql = 'SELECT nid FROM {node} n WHERE n.type = :type';
+	  $result = db_query($sql, array(':type' => 'linkableobject'));
+	  $nids = array();
+	  foreach ($result as $row) {
+	    $nids[] = $row->nid;
+	  }
+		//disinstallando le instanze si cancellera anche la tabella delle relazioni, se non si disinstallano rimangono ma si avrà alcuni problemi in fase di installazione
+		$instance = array('field_name' => 'sa_references','bundle' => 'linkableobject','entity_type' => 'node');
+  		field_delete_instance($instance);
+		$instances = array('field_name' => 'lo_references','bundle' => 'linkableobject','entity_type' => 'node');
+	  	field_delete_instance($instances);
+		$fields = array_keys(_linkableobject_installed_fields());
+		foreach ($fields as $field) {
+			field_delete_field($field);
+		}
+
+	  drupal_set_message(t('Rimozione completata'));
+}
+
+function linkableobject_install(){
+
+	//===================== CREAZIONE DELLA CARTELLA '/collabrep' e '/collabrep/cache'========================
+
+	$linkableobject_file_path = /*file_directory_path().*/'public://collabrep';
+	if( !file_prepare_directory($linkableobject_file_path) ){
+		drupal_set_message('Cannot create or set the right permissions to the file folder. Please create a "collabrep" folder inside '.conf_path().'/files'.' and make it writeable or the module will not work.','error');
+	}
+	$collabrep_cache_path = /*file_directory_path().*/'public://collabrep/cache';
+	if (!file_prepare_directory($collabrep_cache_path)) {
+		drupal_set_message('Cannot create or set the right permissions to the CACHE folder. Please create a "cache" folder inside '.conf_path().'/files'.'/collabrep/ and make it writeable or the module will not work.','error');
+	}
+
+	node_types_rebuild();
+	foreach (_linkableobject_installed_fields() as $field) {
+				field_create_field($field);
+	}
+	foreach (_linkableobject_installed_instances() as $instance) {
+		 $instance['entity_type'] = 'node';
+		 $instance['bundle'] = 'linkableobject';
+		 field_create_instance($instance);
+ }
+  	$types = node_type_get_types();
+
+	drupal_set_message(t('Creation of custom fields completed'));
+}
+function _linkableobject_installed_fields(){
+	return array(
+      	//================== Files Field ============================
+				'SA_reference'=>array(
+		     'field_name' => 'sa_references',
+		     'type' => 'entityreference',
+		     'settings' => array(
+					 'handler' => 'base',
+		       'target_type' => 'node',
+					 'match_operator' => 'CONTAINS',
+					 'size'=>70,
+					 'links'=>TRUE,
+					 'handler_settings' => array(
+						 'sort' => array(
+							 'type' => 'none',
+						 ),
+						 'target_bundles' => array('softwareAttachment'),
+					 ),
+		     ),
+		     'cardinality' => FIELD_CARDINALITY_UNLIMITED, // Field may only have one value.
+		     'translatable' => FALSE,
+		   ),
+			 'LO_reference'=>array(
+			  	 'field_name'=>'lo_references',
+     			 'type' => 'entityreference',
+					 'settings' => array(
+					 'handler' => 'base',
+					 'target_type' => 'node',
+					 'match_operator' => 'CONTAINS',
+					 'size'=>70,
+					 'links'=>TRUE,
+					 'handler_settings' => array(
+						 'sort' => array(
+							 'type' => 'none',
+						 ),
+						 'target_bundles' => array('linkableobject'),
+					 ),
+				 ),
+				 'cardinality' => FIELD_CARDINALITY_UNLIMITED, // Field may only have one value.
+				 'translatable' => FALSE,
+			 ),
+	);
+}
+function _linkableobject_installed_instances(){
+	return array(
+	 'sa_references' => array(
+	 'field_name' => 'sa_references',
+	 'entity_type' => 'node',
+	 'bundle' => 'softwareAttachment',
+	 'label' => 'References to Software Attachment',
+	 'required' => FALSE,
+	 'widget' => array(
+		 'type' => 'entityreference_autocomplete',
+		'weight'=>0.007,
+	 ),
+	 'display' => array(
+     'default' => array(
+       'options'=>'above',
+			 'label'=>'above',
+       'type' => 'entityreference_entity_view', // <-- invalid formatter
+			 'weight'=>0.007,
+      ),
+    ),
+ ),
+ 'lo_references' => array(
+	'field_name' => 'lo_references',
+	'entity_type' => 'node',
+	'bundle' => 'linkableobject',
+	'label' => 'References to the Learning Object',
+	'required' => FALSE,
+	'widget' => array(
+	 'type' => 'entityreference_autocomplete',
+	),
+	'display' => array(
+	 'default' => array(
+		 'options'=>'above',
+		 'type' => 'entityreference_entity_view',
+		 'weight'=>0.008,
+		),
+	),
+),
+	);
+}

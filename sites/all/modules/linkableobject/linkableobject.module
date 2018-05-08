@@ -1,0 +1,1619 @@
+<?php
+$file='';
+$filen='';
+$filedel='';
+$stat='';
+
+function download($filePath,$filename,$filemime)
+{
+	ob_flush();											//to clean the output buffer
+	$file_headers = @get_headers($filePath);
+	if(strpos($file_headers[0],'404 Not Found')) {   		//if the file does not exist, a 404 not found error will occur
+		return False;
+	}
+	else {
+		header("Content-Type: ".$filemime);					//the file MIME exstension
+		header("Content-disposition: attachment; filename=\"".$filename."\"");		//to force the download
+		if (!readfile($filePath)){							//if readfile returns false
+			return False;
+		}
+		else{
+			return True;
+		}
+    }
+}
+
+
+/**
+ * Implement hook_help()
+ */
+function linkableobject_help($path, $arg)
+{
+	switch ($path)
+	{
+    		case 'admin/help#linkableobject':
+      		return '<p>' . t('A linkable file-type node 2.0 by Brensacchi Enrico and Mazzacrelli Fabio based of version 1.0 by Bastianini Riccardo.') . '</p>';
+      		break;
+  	}
+}
+
+
+/**
+ * Implement hook_node_info()
+ */
+function linkableobject_node_info()
+{
+	return array(
+		'linkableobject' => array(
+    		'name' => t('Linkable Object'),
+      		'base' => 'linkableobject',
+      		'description' => t('Upload a file and make it shareable, linkable and compressable.'),
+      		'title_label' => t('Title'),
+    		),
+	);
+}
+
+function linkableobject_menu()
+{
+	$items = array();
+	/*$items['node'] = array(
+			 'title' => 'Downloaded file',
+	    		'description' => 'Downloaded file',
+			'page callback' => 'drupal_get_form',
+			'page arguments' => array(2),
+			'access arguments' => array('dontcare'),
+			'type' => MENU_LOCAL_TASK,
+	);*/
+	/*$items['downloaded'] = array(
+			'title' => 'Downloaded',
+			'description' => 'File downloaded',
+			'page callback' => 'drupal_get_form',
+			'page arguments' => array('file_downloaded'),
+			'access arguments' => TRUE,
+	    		'type' => MENU_CALLBACK,
+		);*/
+	$items['downloading/%'] = array(
+	    'title' => 'Downloading file',
+	    'description' => 'Downloading file',
+	    'page callback' => 'linkableobject_download_fired',
+	    'page arguments' => array(1),
+	    'access arguments' => TRUE,
+	    'type' => MENU_CALLBACK,
+	);
+	return $items;
+}
+function linkableobject_download_fired($nid)
+{
+	$lobj_tfuid=variable_get('collabrep_federation_name', 'NOFEDERATION').' '.variable_get('collabrep_my_name', substr(preg_replace('[^A-Za-z0-9]','',variable_get('site_name', "")),0,20)).' '.$nid;
+	#$res =db_query("SELECT fid  FROM file_usage WHERE id =:nid", array(':nid' => $nid));
+	#$fid = $res->fetchColumn(0);
+	#$file=file_load($fid);
+	#drupal_set_message ('download file - --> '.$file->filename.' -','warning');
+	#if($file) {
+	$id_fdq= db_query("SELECT Id_Fd FROM LO_General WHERE Id_Lo='$nid'");
+	$id_fd=$id_fdq->fetchColumn(0);
+	$res= db_query("SELECT url,filename,filemime FROM LO_File WHERE Id_Fd='$id_fd'");
+	$row= $res->fetch(PDO::FETCH_ASSOC);
+	$url= $row["url"];
+	$filename= $row["filename"];
+	$filemime= $row["filemime"];
+	#}
+	#else {
+	#	drupal_set_message('drupal_access_denied() ','warning');
+	#}
+	download($url,$filename,$filemime);
+	return;
+}
+/*function file_downloaded(){
+	$form = array();
+	$form['downloaded'] = array(
+		'#title' => t('Downloaded'),
+		'#type' => 'textfield',
+		'#value' => t('Downloaded!'),
+		'#weight' => 1,
+	);
+	return $form;
+}*/
+/**
+ * Implements hook_permission()
+ */
+function linkableobject_permission()
+{
+	return array(
+    	'manage linkableobject' => array(
+    		'title' => t('manage linkableobject'),
+    		'description' => t(''),
+    	),
+    	'create or edit own linkableobject' => array(
+    		'title' => t('create or edit own linkableobject'),
+    		'description' => t(''),
+    	),
+    	'view linkableobject' => array(
+    		'title' => t('view linkableobject'),
+    		'description' => t(''),
+    	),
+  	);
+}
+
+/**
+ * Implements hook_node_access():blocca l'accesso a determinate operazioni ad utenti che non possiedono certe caratteristiche/privilegi
+ *
+ * DA CONTROLLARE!!!!!
+ *
+ */
+/*
+function linkableobject_node_access($node,$op,$account)
+{
+	$type = is_string($node) ? $node : $node->type;
+
+	//$type_article_info = node_type_load('article');
+	//$type_article_info->disabled = 1;
+
+	if($op == 'create')
+	{
+		if (user_access('manage linkableobject', $account) || user_access('create or edit own linkableobject', $account) || user_access('is a collabrep repository representation', $account)){
+			return NODE_ACCESS_ALLOW;
+		}
+	}
+	elseif ($op == 'view') {
+		if (user_access('manage linkableobject', $account) || user_access('create or edit own linkableobject', $account) || user_access('view linkableobject', $account) || user_access('is a collabrep repository representation', $account)) {
+			return NODE_ACCESS_ALLOW;
+		}
+	}
+	elseif ($op == 'update')
+	{
+		if ((user_access('create or edit own linkableobject', $account) && ($account->uid == $node->uid)) || user_access('manage linkableobject',$account)) {
+			if (true != _linkableobject_make_bool($node->local)) {
+				drupal_set_message('This object cannot be modified nor deleted because it\'s not local. Only the remote repository who owns this object can alter or delete it.','warning');
+				return NODE_ACCESS_DENY;
+			}else {return NODE_ACCESS_ALLOW;}
+		}elseif (user_access('is a collabrep repository representation', $account)) {
+			if (!_collabrep_make_bool($node->local)) {
+				return NODE_ACCESS_ALLOW;
+      		}
+		}
+	}
+	elseif ($op == 'delete') {
+		$dep = db_query('SELECT refcount FROM {linkableobject_refmap} WHERE fuid = :fuid', array(':fuid'=>$node->fuid) )->fetchField();
+		if( isset($dep) && $dep >= 1 ){
+			return NODE_ACCESS_DENY;
+		}
+		elseif (!_linkableobject_make_bool($node->local)) {
+			user_access('is a collabrep repository representation', $account);
+		}
+		elseif (user_access('manage linkableobject',$account)) {
+			return NODE_ACCESS_ALLOW;
+		}
+		elseif ($node->uid == $account->uid && user_access('create or edit own linkableobject')) {
+			return NODE_ACCESS_ALLOW;
+		}
+		else {return NODE_ACCESS_DENY;}
+	}
+}*/
+
+/**
+ * Implements hook_node_grants($account, $op)
+ * Inform the node access system what permissions the user has. This hook is for implementation by node access modules.*
+ * In this hook, the module grants a user different "grant IDs" within one or more "realms".
+ * In hook_node_access_records(), the realms and grant IDs are associated with permission to view, edit, and delete
+ * individual nodes.
+ */
+function linkableobject_node_grants($account, $op)
+{
+	if ($op == 'view' && (user_access('view linkableobject', $account) || user_access('manage linkableobject', $account) || user_access('create or edit own linkableobject', $account)))
+	{
+
+    		$grants['lobj'] = array(1);
+  	}
+  	if (($op == 'update' || $op == 'delete') && user_access('manage linkableobject', $account))
+	{
+  		$grants['lobj'] = array(1);
+  	}
+  	$grants['lobj2'] = array($account->uid);
+
+  	return $grants;
+}
+
+/**
+ * Implements hook_node_access_records($node)
+ */
+function linkableobject_node_access_record($node)
+{
+
+	// We only care about the node if it's been marked private. If not, it is
+  	if ( $node->type=='linkableobject')
+	{
+  		// treated just like any other node and we completely ignore it.
+    		$grants = array();
+    		$grants[] = array(
+      			'realm' => 'lobj',
+      			'gid' => 1,
+      			'grant_view' => 1, // This should usually be set to $node->status. Failure to do so may expose unpublished content to some users.
+      			'grant_update' => 0,
+      			'grant_delete' => 1,
+      			'priority' => 0,
+    		);
+
+    	// For the example_author array, the GID is equivalent to a UID, which
+    	// means there are many many groups of just 1 user.
+    		$grants[] = array(
+      			'realm' => 'lobj2',
+      			'gid' => $node->uid,
+      			'grant_view' => 1,
+      			'grant_update' => 1,
+      			'grant_delete' => 1,
+      			'priority' => 0,
+    		);
+    		return $grants;
+  	}
+}
+
+/**
+ * Implements hook_form()
+ */
+function linkableobject_form($node, &$form_state)
+{
+	$form = node_content_form($node, $form_state);
+		$form['choose']=array(
+		'#markup' => '<p><font size="2"><b>Choose a Category</b></font></p>',
+		'#weight'=>-1,
+		);
+		$form['Description'] = array(
+			'#type' => 'textarea',
+			'#title' => t('Description'),
+			'#description'   => t('Please insert a description for this Learning Object'),
+			'#default_value' => isset($node->Description) ? $node->Description : '',
+			'#required'=>TRUE,
+			'#weight' => -4,
+		);
+//#################### LO_GENERAL ####################
+		$form['LO_General'] = array(
+			'#type' => 'fieldset',
+			'#title' => t('General'),
+			'#collapsible' => TRUE,
+			'#collapsed' => FALSE,
+			'#weight' => 17,
+		);
+		$form['LO_General']['Entity']= array(
+			'#type' => 'textfield',
+			'#title' => t('Author(s)'),
+			'#default_value' => isset($node->Entity) ? $node->Entity : '',
+			'#required' => TRUE,
+			'#description' => t('Please insert the name(s) of the author(s) (separated by commas) contributing to this Linkable Object.'),
+
+		);
+		$form['LO_General']['Language'] = array(
+			'#type'          => 'select',
+			'#title'         => t('Language'),
+			'#description'   => t('Please select the language of this Learning Object'),
+			'#default_value' => isset($node->Language) ? $node->Language : '',
+			'#options'       => array(
+				'en' => t('en'),
+				'it' => t('it'),
+			),
+			'#required' => TRUE,
+		);
+		$form['LO_General']['Keyword'] = array(
+      			'#type' => 'textfield',
+      			'#title' => t('Keywords'),
+      			'#default_value' => isset($node->Keyword) ? $node->Keyword : '',
+	  		'#description' => t('Please insert one or more keywords (separated by commas) that describes this Linkable Object.'),
+    		);
+		$form['LO_General']['Coverage'] = array(
+			'#type' => 'textfield',
+			'#title' => t('Coverage'),
+	    '#default_value' => isset($node->Coverage) ? $node->Coverage : '',
+			'#description' => t('Please select the time, culture, geography or region to which this linkable object applies.'),
+	);
+		$form['LO_General']['Structure'] = array(
+			'#type'          => 'select',
+			'#title'         => t('Structure'),
+			'#description'   => t('Please select the structure of this linkable object.'),
+			'#default_value' => isset($node->Structure) ? $node->Structure : '',
+			'#options'       => array(
+				'atomic'   	 => t('Atomic'),
+		    		'collection'   	 => t('Collection'),
+		    		'networked'      => t('Networked'),
+		    		'hierarchical'   => t('Hierarchical'),
+		    		'linear' 	 => t('Linear'),
+			),
+			'#ajax' => array(
+            		'callback' => 'form_Tech_or_Relat',
+            		'wrapper' => 'ajax_markup_div',
+								'replace' => TRUE,
+        	),
+	);
+	$form['LO_LifeCycle']=array(
+		'#type' => 'fieldset',
+		'#title' => t('Life Cycle'),
+		'#collapsible' => TRUE,
+		'#collapsed' => TRUE,
+		'#weight'=>25,
+	);
+	$form['LO_LifeCycle']['Version']=array(
+		'#type' => 'textfield',
+		'#title' => t('Version'),
+		'#default_value' => isset($node->Version) ? $node->Version : '',
+		'#description' => t('The edition of this learning object.'),
+	);
+	$form['LO_LifeCycle']['Status']=array(
+		'#type'=>'select',
+		'#title'=>t('Status'),
+		'#description'=>t('The completion status or condition of this learning object.'),
+		'#default_value' => isset($node->Status) ? $node->Status : '',
+		'#options'=>array(
+			'draft'=>t('Draft'),
+			'final'=>t('Final'),
+			'revised'=>t('Revised'),
+			'unavailable'=>t('Unavailable'),
+		),
+
+	);
+
+	if(isset($node->Structure))
+	{
+		if(!isset($form_state['values']['Structure']))
+		{
+			$form_state['values']['Structure']=$node->Structure;
+			$form['LO_General']['Structure']['#default_value']=$node->Structure;
+			$_SESSION["structure"] =$node->Structure;
+				$form['LO_General']['Structure']['#disabled'] = TRUE;
+
+		}
+
+	}
+	if(!isset($form_state['values']['Structure']))
+	{
+		if(isset($_SESSION["structure"])){
+			$form_state['values']['Structure']=$_SESSION["structure"];
+			$form['LO_General']['Structure']['#default_value']=$_SESSION["structure"] ;
+		}else{
+			$_SESSION["structure"]='';
+			$form_state['values']['Structure']='';
+			$form['LO_General']['Structure']['#default_value']='' ;
+		}
+
+	}
+	$form['ajax_markup'] = array(
+        	'#prefix' => '<div id="ajax_markup_div">',
+        	'#suffix' => '</div>',
+					'#effect'=>'fade',
+					'#weight' => 24,
+    	);
+	if ($form_state['values']['Structure']=='atomic' || $form_state['values']['Structure']=='')
+	{
+		$_SESSION["structure"] = 'atomic';
+
+		global $file;
+
+      $form['ajax_markup']['LO_Technical'] = array(
+			'#type' => 'fieldset',
+			'#title' => t('Technical'),
+			'#collapsible' => TRUE,
+			'#collapsed' => FALSE,
+		);
+		$form['ajax_markup']['LO_Technical']['Format']= array(
+			'#type'=>'textfield',
+			'#title'=>t('Format'),
+			'#default_value'=>isset($node->Format)?$node->Format :'',
+			'#required'=> TRUE,
+			'#description'=>t('Technical datatype(s) of (all the components of) this learning object.'),
+		);
+		$form['ajax_markup']['LO_Technical']['InstallationRemarks']= array(
+			'#type' => 'textfield',
+			'#title' => t('Installation Remarks'),
+			'#default_value' => isset($node->InstallationRemarks) ? $node->InstallationRemarks : '',
+			'#required' => FALSE,
+			'#description' => t('Please describe how to install this linkable object.'),
+		);
+		$form['ajax_markup']['LO_Technical']['OtherPlatformRequirements']= array(
+			'#type' => 'textfield',
+			'#title' => t('Other Platform Requirements'),
+			'#default_value' => isset($node->OtherPlatformRequirements) ? $node->OtherPlatformRequirements : '',
+			'#required' => FALSE,
+			'#description' => t('Please insert more information about other software and hardware requirements.'),
+		);
+		$form['ajax_markup']['LO_Technical']['Duration']= array(
+			'#type' => 'textfield',
+			'#title' => t('Duration'),
+			'#default_value' => isset($node->Duration) ? $node->Duration : '',
+			'#required' => FALSE,
+			'#description' => t('Format example: 01h30m or 45m00s; Please insert the duration time of this linkable object (useful if the linkable object contain files like movies, sounds or animations).'),
+		);
+		$form['ajax_markup']['LO_Technical']['Size']= array(
+			'#type'=>'textfield',
+			'#title'=>t('Size'),
+			'#default_value'=>isset($node->Size)?$node->Size :'',
+			'#required'=> FALSE,
+			'#description'=>t('The size of the digital learning object(Specify bytes, kb or mb)'),
+		);
+		$form['ajax_markup']['LO_Technical']['Location']= array(
+			'#type'=>'textfield',
+			'#title'=>t('Location'),
+			'#default_value'=>isset($node->Location)?$node->Location :'',
+			'#required'=> FALSE,
+			'#description'=>t('This is where the learning object is physically located.'),
+		);
+		$form_state['values']['ajax_markup']['LO_Technical']['files']['#file']=$file;
+		$form['ajax_markup']['LO_Technical']['files']= array(
+			'#title' => t('Upload file'),
+			'#type' => 'managed_file',
+			'#description' => t('Please upload a file! Allowed file types: jpg jpeg png gif txt doc xls pdf ppt pps odt ods odp zip avi mov mpeg mpg mp4 mp3 '),
+			'#field_name' => 'files',
+			'#required' => TRUE,
+			'#progress_indicator' => 'bar',
+			//'#upload_location'    => 'private://',
+     			"#upload_validators"  => array("file_validate_extensions" => array("jpg jpeg png gif txt doc xls pdf ppt pps odt ods odp zip avi mov mpeg mpg mp4 mp3")),
+			'#default_value' => isset($file->fid) ? $file->fid : '',
+ 		);
+
+
+
+	}elseif($form_state['values']['Structure']=='collection')
+	{
+		$stat = '-';
+		$_SESSION["structure"] ='collection';
+		$form['ajax_markup']['LO_Relation'] = array(
+			'#type' => 'fieldset',
+			'#title' => t('Relation'),
+			'#collapsible' => TRUE,
+			'#collapsed' => FALSE,
+		);
+		$form['ajax_markup']['LO_Relation']['kind']=array(
+			'#markup' => '<p><font size="3"><b>Collection</b></font></p>
+			<font size="2">A set of objects with no specified relationship between them.</font>'
+
+		);
+	}elseif($form_state['values']['Structure']=='linear'){
+   	$_SESSION["structure"] ='collection';
+		$form['ajax_markup']['LO_Relation'] = array(
+			'#type' => 'fieldset',
+			'#title' => t('Relation'),
+			'#collapsible' => TRUE,
+			'#collapsed' => FALSE,
+		);
+		$form['ajax_markup']['LO_Relation']['kind']=array(
+			'#markup' => '<p><font size="3"><b>Linear</b></font></p>
+			<font size="2">A set of objects that are fully ordered.</font>'
+
+		);
+	}elseif($form_state['values']['Structure']=='networked'){
+		$_SESSION["structure"] ='collection';
+		$form['ajax_markup']['LO_Relation'] = array(
+			'#type' => 'fieldset',
+			'#title' => t('Relation'),
+			'#collapsible' => TRUE,
+			'#collapsed' => FALSE,
+		);
+		$form['ajax_markup']['LO_Relation']['kind']=array(
+			'#markup' => '<p><font size="3"><b>Networked</b></font></p>
+			<font size="2">A set of objects with relationships that are unspecified.</font>'
+
+		);
+	}elseif($form_state['values']['Structure']=='hierarchical'){
+		$_SESSION["structure"] ='collection';
+		$form['ajax_markup']['LO_Relation'] = array(
+			'#type' => 'fieldset',
+			'#title' => t('Relation'),
+			'#collapsible' => TRUE,
+			'#collapsed' => FALSE,
+		);
+		$form['ajax_markup']['LO_Relation']['kind']=array(
+			'#markup' => '<p><font size="3"><b>Hierarchical</b></font></p>
+			<font size="2">A set of objects whose relationships can be represented by a tree structure.</font>'
+
+		);
+	}
+
+	//#################### LO_Educational ####################
+	$form['LO_Educational'] = array(
+		'#type' => 'fieldset',
+		'#title' => t('Educational'),
+		'#collapsible' => TRUE,
+		'#collapsed' => TRUE,
+		'#weight' => 26,
+	);
+	$form['LO_Educational']['InteractivityType']= array(
+		'#type' => 'select',
+		'#title' => t('Interactivity Type'),
+		'#default_value' => isset($node->InteractivityType) ? $node->InteractivityType : '',
+		'#description' => t('Please select the predominant mode of learning supported by this linkable object.'),
+		'#options' => array(
+			'active'=>t('Active'),
+			'expositive'=>t('Expositive'),
+			'mixed'=>t('Mixed'),
+		),
+	);
+	$form['LO_Educational']['LearningResourceType']= array(
+		'#type' => 'select',
+		'#title' => t('Learning Resource Type'),
+		'#default_value' => isset($node->LearningResourceType) ? $node->LearningResourceType : '',
+		'#description' => t('Please specify the kind of linkable object.'),
+		'#options' => array(
+			'exercise'			=>t('Exercise'),
+			'simulation'		=>t('Simulation'),
+			'questionnaire'		=>t('Questionnaire'),
+			'diagram'			=>t('Diagram'),
+			'figure'			=>t('Figure'),
+			'graph'				=>t('Graph'),
+			'index'				=>t('Index'),
+			'slide'				=>t('Slide'),
+			'table'				=>t('Table'),
+			'narrative text'	=>t('Narrative Text'),
+			'exam'				=>t('Exam'),
+			'experiment'		=>t('Experiment'),
+			'problem statement' =>t('Problem Statement'),
+			'self assessment'	=>t('Self Assessment'),
+			'lecture'			=>t('Lecture'),
+		),
+	);
+	$form['LO_Educational']['InteractivityLevel']= array(
+		'#type' => 'select',
+		'#title' => t('Interactivity Level'),
+		'#default_value' => isset($node->InteractivityLevel) ? $node->InteractivityLevel : '',
+		'#description' => t('Please specify the degree of interactivity characterizing this linkable object.'),
+		'#options' => array(
+			'very low'	=>t('Very Low'),
+			'low'		=>t('Low'),
+			'medium'	=>t('Medium'),
+			'high'		=>t('High'),
+			'very high'	=>t('Very High'),
+		),
+	);
+	$form['LO_Educational']['SemanticDensity']= array(
+		'#type' => 'select',
+		'#title' => t('Semantic Density'),
+		'#default_value' => isset($node->SemanticDensity) ? $node->SemanticDensity : '',
+		'#description' => t('Please specify the degree of concisness of this linkable object.'),
+		'#options' => array(
+			'very low'	=>t('Very Low'),
+			'low'		=>t('Low'),
+			'medium'	=>t('Medium'),
+			'high'		=>t('High'),
+			'very high'	=>t('Very High'),
+		),
+	);
+	$form['LO_Educational']['IntendedEndUserRole']= array(
+		'#type' => 'select',
+		'#title' => t('Intended End User Role'),
+		'#default_value' => isset($node->IntendedEndUserRole) ? $node->IntendedEndUserRole : '',
+		'#description' => t('Please specify the principal users for which this linkable object is designed.'),
+		'#options' => array(
+			'teacher'	=>t('Teacher'),
+			'author'	=>t('Author'),
+			'learner'	=>t('Learner'),
+			'manager'	=>t('Manager'),
+		),
+	);
+
+	$form['LO_Educational']['Context']= array(
+		'#type' => 'select',
+		'#title' => t('Context'),
+		'#default_value' => isset($node->Context) ? $node->Context : '',
+		'#description' => t('Please specify the principal environment within which the learning and the use of this linkable object is intended to take place.'),
+		'#options' => array(
+			'school'			=>t('School'),
+			'higher education'	=>t('Higher Education'),
+			'training'			=>t('Training'),
+			'other'				=>t('Other'),
+		),
+	);
+	$form['LO_Educational']['TypicalAgeRange']= array(
+		'#type' => 'textfield',
+		'#title' => t('Typical Age Range'),
+		'#description'   => t('Please specify the age of typical intended user.'),
+		'#default_value' => isset($node->TypicalAgeRange) ? $node->TypicalAgeRange : '',
+		'#required' => FALSE,
+	);
+	$form['LO_Educational']['Difficulty']= array(
+		'#type' => 'select',
+		'#title' => t('Difficulty'),
+		'#default_value' => isset($node->Difficulty) ? $node->Difficulty : '',
+		'#description' => t('Please specify how hard is to work with or through this linkable object.'),
+		'#options' => array(
+			'very easy'		 =>t('Very Easy'),
+			'easy'			 =>t('Easy'),
+			'medium'		 =>t('Medium'),
+			'difficult'		 =>t('Difficult'),
+			'very difficult' =>t('Very Difficult'),
+		),
+	);
+	$form['LO_Educational']['TypicalLearningTime']= array(
+		'#type' => 'textfield',
+		'#title' => t('Typical Learning Time'),
+		'#description'   => t('Format example: 01h30m or 45m00s; Please specify approximative time it takes to work with or through this linkable object.'),
+		'#default_value' => isset($node->TypicalLearningTime) ? $node->TypicalLearningTime : '',
+		'#required' => FALSE,
+	);
+	$form['LO_Educational']['edu_Description']= array(
+		'#type' => 'textfield',
+		'#title' => t('Description'),
+		'#description' => t('Please specify comments on how this linkable object is to be used.'),
+		'#default_value' => isset($node->edu_Description) ? $node->edu_Description : '',
+		'#required' => FALSE,
+	);
+	$form['LO_Educational']['edu_Language'] = array(
+		'#type'          => 'select',
+		'#title'         => t('Language'),
+		'#description'   => t('Please select the language of the Learning Object User'),
+		'#default_value' => isset($node->edu_Language) ? $node->edu_Language : '',
+		'#options'       => array(
+			'en' => t('en'),
+			'it' => t('it'),
+		),
+	);
+
+	//#################### LO_Rights ####################
+	$form['LO_Rights'] = array(
+		'#type' => 'fieldset',
+		'#title' => t('Rights'),
+		'#collapsible' => TRUE,
+		'#collapsed' => TRUE,
+		'#weight' => 28,
+	);
+	$form['LO_Rights']['Cost']= array(
+		'#type' => 'select',
+		'#title' => t('Cost'),
+		'#description'   => t('Please specify if this linkable object requires payment.'),
+		'#default_value' => isset($node->Cost) ? $node->Cost : '',
+		'#options'       => array(
+			'no'=>t('No'),
+			'yes'=>t('Yes'),
+		),
+	);
+	$form['LO_Rights']['Copyright']= array(
+		'#type' => 'select',
+		'#title' => t('Copyright and Other Restrictions'),
+		'#description'   => t('Please specify if there are copyright or other restrictions applies to the use of this linkable object.'),
+		'#default_value' => isset($node->Copyright) ? $node->Copyright : '',
+		'#options' => array(
+			'no'=>t('No'),
+			'yes'=>t('Yes'),
+		),
+		'#required'=> TRUE,
+	);
+	$form['LO_Rights']['rights_Description']= array(
+		'#type' => 'textfield',
+		'#title' => t('Description'),
+		'#description'   => t('Please specify comments on the conditions of use of this linkable object.'),
+		'#default_value' => isset($node->rights_Description) ? $node->rights_Description : '',
+
+	);
+
+	//#################### Id_Fd ####################
+	if(!empty($node->Id_Fd))
+	{
+    		if( user_access('manage linkableobject') )
+		{
+    			// l'amministratore può visualizzare il FUID, quindi creo il campo 'shown_fuid'
+    			$form['shown_Id_Fd'] = array(
+    				'#type' => 'item',
+				'#title' => 'Id_Fd',
+				'#weight'=>5,
+				'#markup' => $node->Id_Fd,
+				'#description' => t('The Federation Unique ID of this object (this field is automatically generated and it\'s empty on unsaved objects).Use this FUID to specify this node as a dependency'),
+      			);
+		}
+	}
+	return $form;
+}
+
+function linkableobject_form_alter(&$form, &$form_state, $form_id)
+{
+	if ($form_id=='linkableobject_node_form'){
+		$form['tassonomia'][26]['#value']=84;
+		$form['ajax_markup']['LO_Technical']['sa_references']=$form['sa_references'];
+		$form['ajax_markup']['LO_Relation']['lo_references']=$form['lo_references'];
+		unset($form['lo_references']);
+		unset($form['sa_references']);
+		if(isset($_SESSION["structure"])){
+			$test=$_SESSION["structure"];
+		}else{
+			$test='';
+		}
+		if($form_state['values']['Structure']=='atomic' || $test=='atomic'|| $test==''){
+
+				$form['ajax_markup']['LO_Relation']['lo_references']['#access']=0;
+
+		}elseif($form_state['values']['Structure']=='collection' || $form_state['values']['Structure']=='hierarchical' || $form_state['values']['Structure']=='linear' || $test =='collection'|| $form_state['values']['Structure']=='networked' ){
+
+			$form['ajax_markup']['LO_Technical']['sa_references']['#access']=0;
+
+		}
+		$ref = conf_path().'/files/collabrep/cache';
+		if (!is_writable($ref))
+			form_set_error('',t('CollabRep working and cache directories have not been created yet or are not writable. Please contact the site administrator.'));
+			unset($form['buttons']);
+
+	}
+
+}
+
+function form_Tech_or_Relat($form, &$form_state) {
+    return $form['ajax_markup'];
+}
+
+
+/**
+ * Implements hook_validate($node,$form,&$form_state)
+ */
+function linkableobject_validate($node, $form, &$form_state)
+{
+	$lobj_tfuid=variable_get('collabrep_federation_name', 'NOFEDERATION').' '.variable_get('collabrep_my_name', substr(preg_replace('[^A-Za-z0-9]','',variable_get('site_name', "")),0,20)).' '.$node->nid;
+	if(!empty($_POST['26']) && !empty($_POST['27'])){
+		form_set_error('27', t("You can't choose two category"));
+		form_set_error('26');
+	}
+if ($form_state['values']['Structure']=='atomic')
+{
+	global $file, $filen, $filedel;
+	$res =db_query("SELECT fid FROM file_usage WHERE id =:nid", array(':nid' => $node->nid));
+	$fido = $res->fetchColumn(0);
+	//drupal_set_message("UPD File!1 ".t($fido->fid).' - ','warning');
+	if(!empty($fido)&&isset($fido)){
+		$filedel = file_load($fido);
+		if(isset($form['ajax_markup']['LO_Technical']['files']['#file'])){
+			$filen=$form['ajax_markup']['LO_Technical']['files']['#file'];
+			db_update('file_usage')
+				->fields(array(
+						'fid' => $filen->fid,
+					)
+				)
+				->condition('id',$node->nid)
+				->execute();
+			$filen->status = FILE_STATUS_PERMANENT;
+			$filen = file_save($filen);
+			file_move($filen, 'public://', FILE_EXISTS_RENAME);
+			file_usage_add($filen, "file", "node",$node->nid, 1);
+			if ($filen->fid <> $filedel->fid){
+				file_delete($filedel);
+				/* ------------------------------------ */
+				$fid1= $filen->fid;
+				$res1=db_query("SELECT * FROM file_managed WHERE fid='$fid1'");
+				$row=$res1->fetch(PDO::FETCH_ASSOC);
+				$uri= $row["uri"];
+				$filename= $row["filename"];
+				$filemime= $row["filemime"];
+				$filesize= $row["filesize"];
+				$url= file_create_url($uri);
+				db_update('LO_File')
+					->fields(array(
+					'url' => $url,
+					'filename' => $filename,
+					'filesize' => $filesize,
+					'filemime' => $filemime,
+						)
+					)
+				->condition('Id_Fd',$lobj_tfuid)
+				->execute();
+				/* ------------------------------------ */
+
+			}
+		}else {
+			$res2 =db_query("SELECT fid FROM file_usage WHERE id =:nid", array(':nid' => $node->nid));
+			$fido2 = $res2->fetchColumn(0);
+			$file=file_load($fido2);
+		}
+
+	}
+	else{
+
+		if (isset($form['ajax_markup']['LO_Technical']['files'])){
+		$file=$form['ajax_markup']['LO_Technical']['files']['#file'];
+		}
+	}
+}
+}
+	/*if ($form_state['values']['Structure']=='atomic')
+	{
+		global $file, $filen, $filedel;
+		drupal_set_message("VALIDATE atomic ".'$'.' - ','warning');
+		$res =db_query("SELECT fid FROM file_usage WHERE id =:nid", array(':nid' => $node->nid));
+		$fido = $res->fetchColumn(0);
+		if(!empty($fido)&&isset($fido)){
+			$filedel = file_load($fido);
+			$filen=$form['ajax_markup']['LO_Technical']['files']['#file'];
+			//drupal_set_message("UPD File! ".t($filen->fid).' - ','warning');
+			db_update('file_usage')
+				->fields(array(
+						'fid' => $filen->fid,
+					)
+				)
+				->condition('id',$node->nid)
+				->execute();
+			$filen->status = FILE_STATUS_PERMANENT;
+			$filen = file_save($filen);
+			file_move($filen, 'public://', FILE_EXISTS_RENAME);
+			file_usage_add($filen, "file", "node",$node->nid, 1);
+			//drupal_set_message("UPD del fid ".t($filedel->fid).' - ','warning');
+			file_delete($filedel);
+			db_delete('LO_File')->condition('filename',$filedel->filename)->execute();
+			$fid1= $filen->fid;
+				$res1=db_query("SELECT * FROM file_managed WHERE fid='$fid1'");
+				$row=$res1->fetch(PDO::FETCH_ASSOC);
+				$uri= $row["uri"];
+				$filename= $row["filename"];
+				$filemime= $row["filemime"];
+				$filesize= $row["filesize"];
+				drupal_set_message("NOME ".$filename);
+				$url= file_create_url($uri);
+			db_query("INSERT INTO LO_File (Id_Fd,url,filename,filesize,filemime) VALUES ('$lobj_tfuid','$url','$filename','$filesize','$filemime')");;
+		}
+		else{
+			$file=$form['ajax_markup']['LO_Technical']['files']['#file'];
+			//drupal_set_message("UPD File NOT exists! ",'warning');
+		}
+	}
+
+}*/
+
+/**
+ * Implements hook_insert($node)
+ *
+ *
+ * CONTROLLARE $node->file_list, filemime e filesize
+ */
+function linkableobject_insert($node)
+{
+	$lobj_tfuid=variable_get('collabrep_federation_name', 'NOFEDERATION').' '.variable_get('collabrep_my_name', substr(preg_replace('[^A-Za-z0-9]','',variable_get('site_name', "")),0,20)).' '.$node->nid;
+	//#################### LO_General ####################
+	db_insert('LO_General')
+		->fields(array(
+				'Id_Lo' => $node->nid,
+				'Id_Fd' => $lobj_tfuid,
+				'Title' => $node->title,
+				'Description' => $node->Description,
+				'Language' => $node->Language,
+				'Keyword' => $node->Keyword,
+				'Coverage' => $node->Coverage,
+				'Structure' => $node->Structure,
+				'Aggregation_Level' => 1,
+				'Deleted' => 'no',
+				'TimeUpd' => $node->changed,
+			)
+		)
+	->execute();
+	//#################### LO_Lifecycle ####################
+	db_insert('LO_LifeCycle')
+		->fields(array(
+			'Id_Lo' => $node->nid,
+			'Id_Fd' => $lobj_tfuid,
+			'Version' => $node->Version,
+			'Status' => $node->Status,
+			)
+		)
+		->execute();
+
+
+
+	//#################### LO_Technical ####################
+	if ($node->Structure=='atomic')
+	{
+		db_insert('LO_Technical')
+			->fields(array(
+					'Id_Lo' => $node->nid,
+					'Id_Fd' => $lobj_tfuid,
+					'Format'=>$node->Format,
+					'InstallationRemarks' => $node->InstallationRemarks,
+					'OtherPlatformRequirements' => $node->OtherPlatformRequirements,
+					'Duration' => $node->Duration,
+					'Size'=>$node->Size,
+					'Location'=>$node->Location,
+				)
+			)
+		->execute();
+	}
+	//#################### LO_Educational ####################
+	db_insert('LO_Educational')
+		->fields(array(
+				'Id_Lo' => $node->nid,
+				'Id_Fd' => $lobj_tfuid,
+				'InteractivityType' => $node->InteractivityType,
+				'LearningResourceType' => $node->LearningResourceType,
+				'InteractivityLevel' => $node->InteractivityLevel,
+				'SemanticDensity' => $node->SemanticDensity,
+				'IntendedEndUserRole' => $node->IntendedEndUserRole,
+				'Context' => $node->Context,
+				'TypicalAgeRange' => $node->TypicalAgeRange,
+				'Difficulty' => $node->Difficulty,
+				'TypicalLearningTime' => $node->TypicalLearningTime,
+				'edu_Description' => $node->edu_Description,
+				'edu_Language' => $node->edu_Language,
+			)
+		)
+		->execute();
+
+		//#################### LO_Rights ####################
+		db_insert('LO_Rights')
+			->fields(array(
+				'Id_Lo' => $node->nid,
+				'Id_Fd' => $lobj_tfuid,
+				'Cost' => $node->Cost,
+				'Copyright' => $node->Copyright,
+				'rights_Description' => $node->rights_Description,
+			)
+		)
+		->execute();
+
+		//#################### LO_Metadata ####################
+		$metadata_schema='LOMv1.0';
+		db_insert('LO_Metadata')
+			->fields(array(
+				'Id_Lo' => $node->nid,
+				'Id_Fd' => $lobj_tfuid,
+				'MetadataSchema' => $metadata_schema,
+				'Language' => 'en',
+			)
+		)
+		->execute();
+
+		//#################### LO_Contribute ####################
+		$role='creator';
+		$date=date("Y-d-m H:i:s" ,time());
+		db_insert('LO_Contribute')
+			->fields(array(
+				'Id_Lo' => $node->nid,
+				'Id_Fd' => $lobj_tfuid,
+				'Role' => $role,
+				'Entity' => $node->Entity,
+				'Date' => $date,
+			)
+		)
+		->execute();
+		//####################LO_category##################
+		$var='26';
+		$var2='27';
+
+			if(!empty($_POST[$var])){
+				db_insert('LO_category')
+				->fields(array(
+					'Id_LO'=>$node->nid,
+					'Categoria_LO'=>$_POST[$var],
+					'Id_Fd'=>$lobj_tfuid,
+				))
+				->execute();
+			}elseif(!empty($_POST[$var2])){
+				db_insert('LO_category')
+				->fields(array(
+					'Id_LO'=>$node->nid,
+					'Categoria_LO'=>$_POST[$var2],
+					'Id_Fd'=>$lobj_tfuid,
+				))
+				->execute();
+			}
+
+
+		//#################### LO_FILE ####################
+			global $file;
+			//drupal_set_message("INS File id ".t($file->fid).' - nid '.$node->nid,'warning');
+			$res =db_query("SELECT fid  FROM file_managed WHERE uri =:uri", array(':uri' => 'temporary:*'));
+			$fid = $res->fetchColumn(0);
+			if ($file)
+			{
+				$file = file_load($file->fid);
+				$file->status = FILE_STATUS_PERMANENT;
+				$file = file_save($file);
+				file_move($file, 'public://', FILE_EXISTS_RENAME);
+				file_usage_add($file, "file", "node",$node->nid, 1);
+				$fid1= $file->fid;
+				$res1=db_query("SELECT * FROM file_managed WHERE fid='$fid1'");
+				$row=$res1->fetch(PDO::FETCH_ASSOC);
+				$uri= $row["uri"];
+				$filename= $row["filename"];
+				$filemime= $row["filemime"];
+				$filesize=$row["filesize"];
+				drupal_set_message("NOME ".$filename);
+				$url= file_create_url($uri);
+				$res2=db_query("INSERT INTO LO_File (Id_Fd,url,filename,filesize,filemime) VALUES ('$lobj_tfuid','$url','$filename','$filesize','$filemime')");
+			}
+			variable_set('test','');
+}
+
+function linkableobject_update($node)
+{
+	$lobj_tfuid=variable_get('collabrep_federation_name', 'NOFEDERATION').' '.variable_get('collabrep_my_name', substr(preg_replace('[^A-Za-z0-9]','',variable_get('site_name', "")),0,20)).' '.$node->nid;
+
+	//Updating LO_General
+	db_update('LO_General')
+		->fields(array(
+					'Title' => $node->title,
+					'Description' => $node->Description,
+					'Language' => $node->Language,
+					'Keyword' => $node->Keyword,
+					'Coverage' => $node->Coverage,
+					'Structure' => $node->Structure,
+					'Aggregation_Level' => 1,
+					'Deleted' => 'no',
+					'TimeUpd' => $node->changed,
+				)
+			)
+		->condition('Id_Lo',$node->nid)
+		->execute();
+
+		//#################### Taxonomy ####################
+		$var='26';
+		$var2='27';
+
+			if(!empty($_POST[$var])){
+				db_update('LO_category')
+				->fields(array(
+					'Id_LO'=>$node->nid,
+					'Categoria_LO'=>$_POST[$var],
+					'Id_Fd'=>$lobj_tfuid,
+				))
+				->condition('Id_Lo',$node->nid)
+				->execute();
+			}elseif(!empty($_POST[$var2])){
+				db_update('LO_category')
+				->fields(array(
+					'Id_LO'=>$node->nid,
+					'Categoria_LO'=>$_POST[$var2],
+					'Id_Fd'=>$lobj_tfuid,
+				))
+				->condition('Id_Lo',$node->nid)
+				->execute();
+			}
+
+	//#################### LO_LifeCycle ####################
+	db_update('LO_LifeCycle')
+	->fields(array(
+		'Version' => $node->Version,
+		'Status' => $node->Status,
+		)
+	)
+	->condition('Id_Lo',$node->nid)
+	->execute();
+
+	//#################### LO_Technical ####################
+	if ($node->Structure=='atomic')
+	{
+		db_update('LO_Technical')
+			->fields(array(
+					'Format'=>$node->Format,
+					'InstallationRemarks' => $node->InstallationRemarks,
+					'OtherPlatformRequirements' => $node->OtherPlatformRequirements,
+					'Duration' => $node->Duration,
+					'Size' => $node->Size,
+					'Location'=>$node->Location,
+				)
+			)
+		->condition('Id_Lo',$node->nid)
+		->execute();
+		global $file;
+		//drupal_set_message("INS File id ".t($file->fid).' - nid '.$node->nid,'warning');
+		$res =db_query("SELECT fid  FROM file_managed WHERE uri =:uri", array(':uri' => 'temporary:*'));
+		$fid = $res->fetchColumn(0);
+/*		if ($file)
+		{
+			$file = file_load($file->fid);
+			$file->status = FILE_STATUS_PERMANENT;
+			$file = file_save($file);
+			file_move($file, 'public://', FILE_EXISTS_RENAME);
+			file_usage_add($file, "file", "node",$node->nid, 1);
+			$fid1= $file->fid;
+			$res1=db_query("SELECT * FROM file_managed WHERE fid='$fid1'");
+			$row=$res1->fetch(PDO::FETCH_ASSOC);
+			$uri= $row["uri"];
+			$filename= $row["filename"];
+			$filemime= $row["filemime"];
+			$filesize=$row["filesize"];
+			drupal_set_message("NOME ".$filename);
+			$url= file_create_url($uri);
+			$res2=db_query("INSERT INTO LO_File (Id_Fd,url,filename,filesize,filemime) VALUES ('$lobj_tfuid','$url','$filename','$filesize','$filemime')");
+		}*/
+	}
+	/*else{
+		if(isset($node->Format)){
+			drupal_set_message("Ho HEy");
+			global $file;
+			$res =db_query("SELECT fid FROM file_usage WHERE id =:nid", array(':nid' => $node->nid));
+			$fid = $res->fetchColumn(0);
+			if (!empty($fid)){
+				db_update('LO_Technical')
+					->fields(array(
+							'Format'=>null,
+							'InstallationRemarks' => null,
+							'OtherPlatformRequirements' => null,
+							'Duration' => null,
+							'Size' => null,
+							'Location'=>null,
+						)
+					)
+				->condition('Id_Lo',$node->nid)
+				->execute();
+			//	db_delete('LO_Technical')->condition('Id_Fd',$node->Id_Fd)->execute();
+			}
+			$file = file_load($fid);
+			drupal_set_message("DEL fid ".t($fid).' - nid '.t($node->nid).' - file fid '.t($file->fid),'warning');
+			file_usage_delete($file, "file", "node",$node->nid, 0);
+			file_delete($file, $force = TRUE);
+		}
+	}*/
+
+	//Updating LO_Educational
+	db_update('LO_Educational')
+		->fields(array(
+					'InteractivityType' => $node->InteractivityType,
+					'LearningResourceType' => $node->LearningResourceType,
+					'InteractivityLevel' => $node->InteractivityLevel,
+					'SemanticDensity' => $node->SemanticDensity,
+					'IntendedEndUserRole' => $node->IntendedEndUserRole,
+					'Context' => $node->Context,
+					'TypicalAgeRange' => $node->TypicalAgeRange,
+					'Difficulty' => $node->Difficulty,
+					'TypicalLearningTime' => $node->TypicalLearningTime,
+					'edu_Description' => $node->edu_Description,
+					'edu_Language' => $node->edu_Language,
+				)
+			)
+		->condition('Id_Lo',$node->nid)
+		->execute();
+
+	//#################### LO_Rights ####################
+	db_update('LO_Rights')
+		->fields(array(
+				'Cost' => $node->Cost,
+				'Copyright' => $node->Copyright,
+				'rights_Description' => $node->rights_Description,
+			)
+		)
+		->condition('Id_Lo',$node->nid)
+		->execute();
+
+	//#################### LO_Contribute ####################
+	$role='creator';
+	$date=date("Y-d-m H:i:s" ,time());
+	db_update('LO_Contribute')
+		->fields(array(
+				'Role' => $role,
+				'Entity' => $node->Entity,
+				'Date' => $date,
+			)
+		)
+		->condition('Id_Lo',$node->nid)
+		->execute();
+	//Updating file
+	//$res =db_query("SELECT fid  FROM file_managed WHERE uri =:uri", array(':uri' => 'temporary:*'));
+	//$fid = $res->fetchColumn(0);
+	//$file=file_load($fid);
+	//$fidn=($form_state['ajax_markup']['LO_Technical']['files']['#file']);
+		/*if($fid){
+			db_update('file_usage')
+				->fields(array(
+						'fid' => $fidn,
+					)
+				)
+				->condition('id',$node->nid)
+				->execute();
+			drupal_set_message("UPD File exists! ".t($fid).' - ','warning');
+		}
+		else{
+			drupal_set_message("UPD File NOT exists! ",'warning');
+		}*/
+}
+
+
+/**
+ * Implements hook_delete($node)
+ */
+function linkableobject_delete($node)
+{
+	global $file;
+	$res =db_query("SELECT fid FROM file_usage WHERE id =:nid", array(':nid' => $node->nid));
+	$fid = $res->fetchColumn(0);
+	if (!empty($fid)){
+		db_delete('LO_General')->condition('Id_Fd',$node->Id_Fd)->execute();
+		db_delete('LO_LifeCycle')->condition('Id_Fd',$node->Id_Fd)->execute();
+		db_delete('LO_Technical')->condition('Id_Fd',$node->Id_Fd)->execute();
+		db_delete('LO_Educational')->condition('Id_Fd',$node->Id_Fd)->execute();
+		db_delete('LO_Rights')->condition('Id_Fd',$node->Id_Fd)->execute();
+		db_delete('LO_Contribute')->condition('Id_Fd',$node->Id_Fd)->execute();
+		db_delete('LO_Metadata')->condition('Id_Fd',$node->Id_Fd)->execute();
+		db_delete('LO_File')->condition('Id_Fd',$node->Id_Fd)->execute();
+		db_delete('LO_category')->condition('Id_Fd',$node->Id_Fd)->execute();// last added think to add that
+		$file = file_load($fid);
+		drupal_set_message("DEL fid ".t($fid).' - nid '.t($node->nid).' - file fid '.t($file->fid),'warning');
+		file_usage_delete($file, "file", "node",$node->nid, 0);
+		file_delete($file, $force = TRUE);
+	}
+	else {
+		db_delete('LO_General')->condition('Id_Fd',$node->Id_Fd)->execute();
+		db_delete('LO_LifeCycle')->condition('Id_Fd',$node->Id_Fd)->execute();
+		db_delete('LO_Technical')->condition('Id_Fd',$node->Id_Fd)->execute();
+		db_delete('LO_Educational')->condition('Id_Fd',$node->Id_Fd)->execute();
+		db_delete('LO_Rights')->condition('Id_Fd',$node->Id_Fd)->execute();
+		db_delete('LO_Contribute')->condition('Id_Fd',$node->Id_Fd)->execute();
+		db_delete('LO_Metadata')->condition('Id_Fd',$node->Id_Fd)->execute();
+		db_delete('LO_File')->condition('Id_Fd',$node->Id_Fd)->execute();
+		drupal_set_message("DEL nid ".t($node->nid),'warning');
+	}
+}
+
+
+/**
+ * Implements hook_load($nodes)
+ * Act on nodes being loaded from the database.
+ */
+function linkableobject_load($nodes)
+{
+	$query = db_select('LO_General','node');
+		$query->leftjoin('LO_LifeCycle','LifeCycle','node.Id_Lo=LifeCycle.Id_Lo',null);
+		$query->leftjoin('LO_Educational','Educational','node.Id_Lo=Educational.Id_Lo',null);
+		$query->leftjoin('LO_Technical','Technical','node.Id_Lo=Technical.Id_Lo',null);
+		$query->leftjoin('LO_Rights','Rights','node.Id_Lo=Rights.Id_Lo',null);
+		$query->leftjoin('LO_Contribute','Contribute','node.Id_Lo=Contribute.Id_Lo',null);
+		$query->leftjoin('file_usage','file_u','node.Id_Lo=file_u.id',null);
+		$query->leftjoin('LO_category','Category','node.Id_Lo=Category.Id_LO',null);
+
+		$query->addField('node','Id_Lo','nid');
+		$query->addField('node','Id_Fd');
+
+		$query->fields('node',array('Language','Description','Keyword','Coverage','Structure','Aggregation_Level','Deleted'));
+		$query->fields('LifeCycle',array('Version','Status'));
+		$query->fields('Category',array('Categoria_LO'));
+		$query->fields('Technical',array('Format','InstallationRemarks','OtherPlatformRequirements','Duration','Size','Location'));
+		$query->fields('Educational',array('InteractivityType','LearningResourceType','InteractivityLevel','SemanticDensity','IntendedEndUserRole','Context','TypicalAgeRange','Difficulty','TypicalLearningTime','edu_Description','edu_Language'));
+		$query->fields('Rights',array('Cost','Copyright','rights_Description'));
+		$query->fields('Contribute',array('Entity'));
+		$query->fields('file_u',array('fid'))
+
+	/*,'InstallationRemarks',
+'OtherPlatformRequirements','Duration'*/
+		->condition('node.Id_Lo', array_keys($nodes));
+		$result = $query->execute();
+		//drupal_set_message("query: ".$query,'warning');
+	foreach ($result as $record)
+	{
+		//element of LO_General
+		$nodes[$record->nid]->Id_Fd	  = $record->Id_Fd;
+		$nodes[$record->nid]->Language	  = $record->Language;
+		$nodes[$record->nid]->Description = $record->Description;
+		$nodes[$record->nid]->Keyword	  = $record->Keyword;
+		$nodes[$record->nid]->Coverage	  = $record->Coverage;
+		$nodes[$record->nid]->Structure	  = $record->Structure;
+		$nodes[$record->nid]->Aggregation_Level	= $record->Aggregation_Level;
+		$nodes[$record->nid]->Deleted	  = $record->Deleted;
+
+		//element of LO_LifeCycle
+		$nodes[$record->nid]->Version=$record->Version;
+		$nodes[$record->nid]->Status=$record->Status;
+		//element of LO_category
+		$nodes[$record->nid]->Categoria_LO=$record->Categoria_LO;
+
+		//element of LO_Technical
+		$nodes[$record->nid]->Format	=  $record->Format;
+		$nodes[$record->nid]->InstallationRemarks	=  $record->InstallationRemarks;
+		$nodes[$record->nid]->OtherPlatformRequirements	=  $record->OtherPlatformRequirements;
+		$nodes[$record->nid]->Duration			=  $record->Duration;
+		$nodes[$record->nid]->Size	=  $record->Size;
+		$nodes[$record->nid]->Location	=  $record->Location;
+
+
+		//element of LO_Educational
+		$nodes[$record->nid]->InteractivityType	=  $record->InteractivityType;
+		$nodes[$record->nid]->LearningResourceType	=  $record->LearningResourceType;
+		$nodes[$record->nid]->InteractivityLevel	=  $record->InteractivityLevel;
+		$nodes[$record->nid]->SemanticDensity	=  $record->SemanticDensity;
+		$nodes[$record->nid]->IntendedEndUserRole	=  $record->IntendedEndUserRole;
+		$nodes[$record->nid]->Context	=  $record->Context;
+		$nodes[$record->nid]->TypicalAgeRange	=  $record->TypicalAgeRange;
+		$nodes[$record->nid]->Difficulty	=  $record->Difficulty;
+		$nodes[$record->nid]->TypicalLearningTime	=  $record->TypicalLearningTime;
+		$nodes[$record->nid]->edu_Description	=  $record->edu_Description;
+		$nodes[$record->nid]->edu_Language	=  $record->edu_Language;
+
+		//element of LO_Rights
+		$nodes[$record->nid]->Cost	=  $record->Cost;
+		$nodes[$record->nid]->Copyright	=  $record->Copyright;
+		$nodes[$record->nid]->rights_Description	=  $record->rights_Description;
+
+		//element of LO_Contribute
+		$nodes[$record->nid]->Entity	=  $record->Entity;
+
+		//element of File
+		global $file;
+		if($record->fid){
+		$file=file_load($record->fid);
+		}
+
+
+	}
+}
+
+function linkableobject_view($node,$view_mode)
+{
+	if(!user_access('manage linkableobject') && $node->Deleted=='yes')
+	{
+  		hide($node->content);
+  	}
+	else
+	{
+  		if($view_mode != 'teaser')		//	or if($view_mode == 'full')
+		{
+			if(isset($_SESSION["structure"])){
+				unset($_SESSION["structure"]);
+			}
+			$qry=db_select('LO_General', 'ln')
+  				->fields('ln')
+  				->condition('Id_Lo', $node->nid, '=')
+  				->execute()
+  				->fetchAssoc();
+			//$node->content['sa_references']['#title']="Ref";
+			$node->content['LO_GENERAL'] = array(
+				'#type' =>'fieldset',
+				'#title' => t('Linkable Object General'),
+				'#collapsible' => TRUE,
+				'#collapsed' => TRUE,
+				'#weight' => 0.003
+			);
+			$node->content['LO_GENERAL']['show_inf'] = array(
+				'#prefix' => '<div class="theme_linkableobject_general">',
+				'#markup' => theme_linkableobject_general($node->nid),
+				'#suffix' => '</div>'
+			);
+			$node->content['LO_LIFECYCLE'] = array(
+				'#type' =>'fieldset',
+				'#title' => t('LifeCycle'),
+				'#collapsible' => TRUE,
+				'#collapsed' => TRUE,
+				'#weight' => 0.004
+			);
+			$node->content['LO_LIFECYCLE']['show_life'] = array(
+				'#prefix' => '<div class="theme_linkableobject_lifecycle">',
+				'#markup' => theme_linkableobject_lifecycle($node->nid),
+				'#suffix' => '</div>'
+			);
+			$check_tech = db_query('SELECT Format FROM {LO_Technical} WHERE Id_Lo=:node_id',array(':node_id'=>$node->nid))->fetchObject();
+			if(isset($check_tech->Format)){
+				$node->content['LO_TECHNICAL'] = array(
+					'#type' =>'fieldset',
+					'#title' => t('Technical'),
+					'#collapsible' => TRUE,
+					'#collapsed' => TRUE,
+					'#weight' => 0.005
+				);
+				$node->content['LO_TECHNICAL']['show_tech'] = array(
+					'#prefix' => '<div class="theme_linkableobject_technical">',
+					'#markup' => theme_linkableobject_technical($node->nid),
+					'#suffix' => '</div>'
+				);
+			}
+			$node->content['LO_EDUCATIONAL'] = array(
+				'#type' =>'fieldset',
+				'#title' => t('Educational'),
+				'#collapsible' => TRUE,
+				'#collapsed' => TRUE,
+				'#weight' => 0.006
+			);
+			$node->content['LO_EDUCATIONAL']['show_edu'] = array(
+				'#prefix' => '<div class="theme_linkableobject_educational">',
+				'#markup' => theme_linkableobject_educational($node->nid),
+				'#suffix' => '</div>'
+			);
+			$node->content['LO_RIGHTS'] = array(
+				'#type' =>'fieldset',
+				'#title' => t('Rights'),
+				'#collapsible' => TRUE,
+				'#collapsed' => TRUE,
+				'#weight' => 0.0065
+			);
+			$node->content['LO_RIGHTS']['show_rights'] = array(
+				'#prefix' => '<div class="theme_linkableobject_rights">',
+				'#markup' => theme_linkableobject_rights($node->nid),
+				'#suffix' => '</div>'
+			);
+			if(user_access('create or edit own linkableobject')){
+				$id_fdq= db_query("SELECT Id_Fd FROM LO_General WHERE Id_Lo='$node->nid'");
+				$id_fd=$id_fdq->fetchColumn(0);
+				$res= db_query("SELECT url,filename,filemime FROM LO_File WHERE Id_Fd='$id_fd'");
+				$row= $res->fetch(PDO::FETCH_ASSOC);
+				$url= $row["url"];
+				if(isset($url)){
+					$node->content['download_trigger'] = array(
+						'#markup'=>'<form action="'.$url.'">
+
+							<button type="submit" style="background-color: #e7e7e7; color: black;font-size: 20px; border-radius: 12px;padding: 9px 20px;" value="Download">Download</button>
+												</form>',
+						'#weight' => 0.002
+					);
+		   		}
+			}
+
+		}else{
+			if(isset($_SESSION["structure"])){
+				unset($_SESSION["structure"]);
+			}
+			if(user_access('create or edit own linkableobject')){
+				$id_fdq= db_query("SELECT Id_Fd FROM LO_General WHERE Id_Lo='$node->nid'");
+				$id_fd=$id_fdq->fetchColumn(0);
+				$res= db_query("SELECT url,filename,filemime FROM LO_File WHERE Id_Fd='$id_fd'");
+				$row= $res->fetch(PDO::FETCH_ASSOC);
+				$url= $row["url"];
+				if(isset($url)){
+				$node->content['download_trigger'] = array(
+					'#markup'=>'<form action="'.$url.'">
+						<button type="submit" style="background-color: #e7e7e7; color: black;font-size: 15px; border-radius: 12px;padding: 5px 12px" value="Download">Download</button>
+											</form>',
+					'#weight' => 0.002
+				);
+				}
+			 }
+		}
+	}
+	if (isset($node->Id_Fd) && user_access('manage linkableobject')) { //Id_Fd is only shown to administrators
+      		$node->content['Id_Fd'] = array(
+				'#markup' => theme_linkableobject_show_Id_Fd($node->Id_Fd),
+				'#weight' => 0.0066);
+    	}
+
+	//File included in this learning object
+	  	$node->content['file'] = array(
+	      		'#markup' => theme_linkableobject_file_list($node),
+	      		'#weight' => 0.001
+	      	);
+
+	return $node;
+}
+function theme_linkableobject_general($node_id){
+	$output = '';
+	if (isset($node_id)) {
+	$show_info = db_query('SELECT Title,Description,Language,Keyword,Coverage,Structure FROM {LO_General} WHERE Id_Lo=:node_id',array(':node_id'=>$node_id))->fetchObject();
+	$show_info2= db_query('SELECT Entity FROM {LO_Contribute} WHERE Id_Lo=:node_id',array(':node_id'=>$node_id))->fetchObject();
+			$output = '<b>Title:</b> '.check_plain($show_info->Title).'<br/>' ;
+		if ($show_info->Description!=''){
+			$output = $output.'<b>Description :</b> '.check_plain($show_info->Description).'<br/>' ;
+		}
+
+			$output = $output.'<b>Author(s) :</b> '.check_plain($show_info2->Entity).'<br/>' ;
+		$output=$output.'<b>Language : </b>'.check_plain($show_info->Language).'<br/>';
+		if($show_info->Keyword!=''){
+			$output =$output.'<b>Keyword :</b> '.check_plain($show_info->Keyword).'<br/>' ;
+		}
+		if($show_info->Coverage!=''){
+			$output =$output.'<b>Coverage :</b> '.check_plain($show_info->Coverage).'<br/>' ;
+		}
+
+			$output =$output.'<b>Structure :</b> '.check_plain($show_info->Structure).'<br/>' ;
+	}
+	return $output;
+}
+function theme_linkableobject_lifecycle($node_id){
+	$output = '';
+	if (isset($node_id)) {
+	$show_info = db_query('SELECT Status,Version FROM {LO_LifeCycle} WHERE Id_Lo=:node_id',array(':node_id'=>$node_id))->fetchObject();
+			if($show_info->Version!=''){
+				$output = '<b>Version :</b> '.check_plain($show_info->Version).'<br/>' ;
+			}
+			$output = $output.'<b>Status :</b> '.check_plain($show_info->Status).'<br/>' ;
+	}
+	return $output;
+}
+function theme_linkableobject_technical($node_id){
+	$output = '';
+	if (isset($node_id)) {
+
+	$show_info = db_query('SELECT Format,Size,Location,InstallationRemarks,OtherPlatformRequirements,Duration FROM {LO_Technical} WHERE Id_Lo=:node_id',array(':node_id'=>$node_id))->fetchObject();
+	if(isset($show_info->Format)){
+			$output = '<b>Format :</b> '.check_plain($show_info->Format).'<br/>' ;
+		if ($show_info->InstallationRemarks!=''){
+			$output = $output.'<b>InstallationRemarks :</b> '.check_plain($show_info->InstallationRemarks).'<br/>' ;
+		}
+		if($show_info->OtherPlatformRequirements!=''){
+				$output=$output.'<b>OtherPlatformRequirements : </b>'.check_plain($show_info->OtherPlatformRequirements).'<br/>';
+			}
+		if($show_info->Size!=''){
+			$output =$output.'<b>Size :</b> '.check_plain($show_info->Size).'<br/>' ;
+		}
+		if($show_info->Location!=''){
+			$output =$output.'<b>Location :</b> '.check_plain($show_info->Location).'<br/>' ;
+		}
+		if($show_info->Duration!=''){
+			$output =$output.'<b>Duration :</b> '.check_plain($show_info->Duration).'<br/>' ;
+		}
+	}
+}
+	return $output;
+}
+function theme_linkableobject_educational($node_id){
+	$output = '';
+	if (isset($node_id)) {
+	$show_info = db_query('SELECT InteractivityType,LearningResourceType,InteractivityLevel,SemanticDensity,IntendedEndUserRole,Context,TypicalAgeRange,edu_Description,edu_Language FROM {LO_Educational} WHERE Id_Lo=:node_id',array(':node_id'=>$node_id))->fetchObject();
+		if ($show_info->InteractivityType!=''){
+			$output = $output.'<b>Interactivity Type :</b> '.check_plain($show_info->InteractivityType).'<br/>' ;
+		}
+		if($show_info->LearningResourceType!=''){
+				$output=$output.'<b>Learning Resource Type : </b>'.check_plain($show_info->LearningResourceType).'<br/>';
+			}
+		if($show_info->InteractivityLevel!=''){
+			$output =$output.'<b>Interactivity Level :</b> '.check_plain($show_info->InteractivityLevel).'<br/>' ;
+		}
+		if($show_info->SemanticDensity!=''){
+			$output =$output.'<b>Semantic Density :</b> '.check_plain($show_info->SemanticDensity).'<br/>' ;
+		}
+		if($show_info->IntendedEndUserRole!=''){
+			$output =$output.'<b>Intended End User Role :</b> '.check_plain($show_info->IntendedEndUserRole).'<br/>' ;
+		}
+		if($show_info->Context!=''){
+			$output =$output.'<b>Context :</b> '.check_plain($show_info->Context).'<br/>' ;
+		}
+		if($show_info->TypicalAgeRange!=''){
+			$output =$output.'<b>Typical Age Range :</b> '.check_plain($show_info->TypicalAgeRange).'<br/>' ;
+		}
+		if($show_info->edu_Description!=''){
+			$output =$output.'<b>Description :</b> '.check_plain($show_info->edu_Description).'<br/>' ;
+		}
+		if($show_info->edu_Language!=''){
+			$output =$output.'<b>Language :</b> '.check_plain($show_info->edu_Language).'<br/>' ;
+		}
+	}
+	return $output;
+}
+function theme_linkableobject_rights($node_id){
+	$output = '';
+	if (isset($node_id)) {
+	$show_info = db_query('SELECT Cost,Copyright,rights_Description FROM {LO_Rights} WHERE Id_Lo=:node_id',array(':node_id'=>$node_id))->fetchObject();
+		if ($show_info->Cost!=''){
+			$output = $output.'<b>Cost :</b> '.check_plain($show_info->Cost).'<br/>' ;
+		}
+		if($show_info->Copyright!=''){
+				$output=$output.'<b>Copyright : </b>'.check_plain($show_info->Copyright).'<br/>';
+			}
+		if($show_info->rights_Description!=''){
+			$output =$output.'<b>rights_Description :</b> '.check_plain($show_info->rights_Description).'<br/>' ;
+		}
+	}
+	return $output;
+}
+
+/**
+ * theme function to draw the file list on the node page
+ *
+ */
+function theme_linkableobject_file_list($node) {
+	$res =db_query("SELECT fid  FROM file_usage WHERE id =:nid", array(':nid' => $node->nid));
+	$fid = $res->fetchColumn(0);
+	//drupal_set_message("FILE fid: ".$fid,'warning');
+	if ($fid)
+	{
+		$file=file_load($fid);
+$id_fdq= db_query("SELECT Id_Fd FROM LO_General WHERE Id_Lo='$node->nid'");
+	$id_fd=$id_fdq->fetchColumn(0);
+$filesizeq= db_query("SELECT filesize FROM LO_File WHERE Id_Fd='$id_fd'");
+	$filesize=$filesizeq->fetchColumn(0);
+		$output = '<h3><li>'.'attachment: '.$file->filename.' ('.(int)($filesize/1024) .'kB)'.'</li></h3>';
+		return $output.'</br>';
+	}
+	else
+	{
+		$output = ' ';
+		return $output;
+	}
+}
+
+function theme_linkableobject_show_Id_Fd($Id_Fd)
+{
+	$output = '';
+	if (isset($Id_Fd))
+	{
+		$output = '<b>Id_Fd</b>: '.$Id_Fd;
+	}
+	return $output;
+}
+
+function _linkableobject_download_form($form, &$form_state, $nid)
+{
+	$res =db_query("SELECT fid  FROM file_usage WHERE id =:nid", array(':nid' => $nid));
+	$fid = $res->fetchColumn(0);
+	if ($fid)
+	{
+		$form = array();
+		$form['downloadbutton'] = array(
+		'#type' => 'button',
+		'#value' => t('Download!'),
+		'#weight' => 1,
+		);
+	$form['#action'] = url('downloading/'.$nid);
+	return $form;
+	}
+}
+

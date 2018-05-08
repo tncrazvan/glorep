@@ -1,0 +1,839 @@
+<?php
+
+function tax_assistant_menu() {
+    $items = array();
+
+    $items['tax_assistant/synonyms'] = array(
+        'title' => '',
+        'page callback' => 'get_synonyms',
+        /*'access arguments' => array(),*/
+		'access arguments' => array('create or edit own linkableobject'),
+        'type' => MENU_CALLBACK,
+    );
+
+    $items['tax_assistant/descrizione'] = array(
+        'title' => '',
+        'page callback' => 'category_hint',
+        /*'access arguments' => array(),*/
+        'access arguments' => array('create or edit own linkableobject'),
+		'type' => MENU_CALLBACK,
+    );
+
+    return $items;
+}
+
+    //questa funzione è usata per alterare la disposizione del form originale
+    //contenuto in un altro modulo (linkableobject)
+
+function tax_assistant_form_alter(&$form, &$form_state, $form_id) {
+
+    if ($form_id == 'linkableobject_node_form') {
+        //modifica del form 'taxonomy'
+        if (isset($form['taxonomy'])) {
+            foreach ($form['taxonomy'] as $key => $value) {
+                if ($key > 0) {
+                    $form['taxonomy']["$key"]['#ahah'] = array(
+                        'path' => 'tax_assistant/synonyms',
+                        'wrapper' => 'area_sinonimi',
+                    );
+                }
+            }
+        }
+
+        //form dei sinonimi        
+        $form['sinonimi'] = array(
+            '#type' => 'hidden',
+            '#prefix' => '<div id="area_sinonimi">',
+            '#suffix' => '</div>',
+        );
+
+        $form['title']['#ahah']['path'] = 'tax_assistant/descrizione';
+        $form['title']['#ahah']['wrapper'] = 'valutazione';
+
+        //$form['body']['#weight'] = 2;
+        $form['body']['#ahah']['path'] = 'tax_assistant/descrizione';
+        $form['body']['#ahah']['wrapper'] = 'valutazione';
+        //$form['body']['#weight'] = 3;
+
+
+        $form['refresh'] = array(
+            '#value' => 'Refresh Hint',
+            '#type' => 'button',
+            '#prefix' => '<div id="refresh">',
+            '#suffix' => '</div>',
+            '#ahah' => array(
+                'path' => 'tax_assistant/descrizione',
+                'wrapper' => 'valutazione',
+            ),
+        );
+
+
+        $form['hint'] = array(
+            '#title' => t('Category Hint'),
+            '#type' => 'hidden',
+            '#prefix' => '<div id="valutazione">',
+            '#suffix' => '</div>',
+            //'#weight' => 6,
+        );
+				
+        if (isset($form['vocabulary_hint'])) {
+            unset($form['vocabulary_hint']); //disabilita vocabulary_hint
+        }
+       //set_order_form($form);
+    }
+}
+  
+ /*function set_order_form(&$form) {
+    $form['vocabulary']['#weight'] =-1;    
+    $form['title']['#weight'] = 5;
+    $form['sinonimi']['#weight'] = 3;
+    $form['body']['#weight'] = 4;
+    $form['hint']['#weight'] = 5;
+    $form['keys']['#weight'] = 6;
+    $form['keywords']['#weight'] = 7;
+    $form['is_software']['#weight'] = 8;
+    $form['depends_on']['#weight'] = 9;
+    $form['revision_information']['#weight'] = 9;
+}*/
+ 
+function get_vocabolario($vid) {
+    //carica dal database i vocabolari disponibili
+    $result = db_query('SELECT vid, name FROM {taxonomy_vocabulary} where vid=:vid', array(':vid' => $vid ), array('target'=>'slave'));
+    foreach ($result as $rec) {
+        return $rec->name;
+    }
+    //$rec = db_fetch_object($result);
+    //return $rec->name;
+}
+
+//questa funzione NON è PI§ USATA quindi si puo' rimuovere
+
+function get_terms() {
+    $form_build_id = $_POST['form_build_id'];
+    $form_state = array('submitted' => FALSE);
+    $form = form_get_cache($form_build_id, $form_state);
+
+    //qui il codice che reperisce le categorie associate al vocabolario
+    $vid = $_POST['vocabulary'];
+    /*$result = db_query('select t1.tid,t1.name, d1.depth FROM {term_data} t1 
+       JOIN dis_cat_terms_depth D1 ON t1.tid = d1.tid WHERE t1.vid=:d', array('vid'=>':vid'));
+*/
+    $query = db_select('taxonomy_term_data','d1.depth');
+    $query->join('dis_cat_terms_depth','t1','t1.vid = d1.tid');
+    $query->fields('t1',array(':vid'=> $vid))
+     ->fields('d1',array(':tid'=>$tid))
+     ->condition('t1.vid',':vid') ;
+    $result = $query->execute();
+   /* while ($rec = db_fetch_object($result)) {
+        $d = "";
+        for ($i = 0; $i < $rec->depth; $i++) {
+            $d.="-";
+        }*/
+    foreach ($result as $rec) {
+        $d="";
+        for ($i=0; $i < $rec->depth; $i++) { 
+            $d.="-";
+        }
+        $categorie[$rec->tid] = $d . $rec->name;
+    }
+    //aggiorna le opzioni con i termini e imposta ahah
+    $form['categorie'] = array(
+        '#type' => 'select',
+        '#title' => t('Select a category'),
+        '#options' => $categorie,
+        '#ahah' => array(
+            'path' => 'tax_assistant/synonyms',
+            'wrapper' => 'area_sinonimi'),
+    );
+    //registro la cache aggiornata
+    form_set_cache($_POST['form_id'], $form, $form_state);
+    //costruzione del form
+    $form = form_builder($_POST['form_id'], $form, $form_state);
+    //rendering del campo select 
+    $output.=drupal_render($form['categorie']);
+    //passaggio della modifica, il metodo drupal_json è deprecato in drupal 7 quindi si utilizza drupal_json_output.
+    drupal_json_output(array('status' => TRUE, 'data' => $_POST['tipo'] . $output));
+    exit;
+}
+
+function get_synonyms() {
+    $form_build_id = $_POST['form_build_id'];
+    $form_state = array('submitted' => FALSE);
+    $form = form_get_cache($form_build_id, $form_state);
+
+    $synonyms = '';
+
+    //carica i sinonimi associati a ciascun vocabolario selezionato
+    foreach ($_POST['taxonomy'] as $voc => $value) {
+        $tid = $_POST['taxonomy'][$voc];
+        $result = db_query('SELECT name FROM {taxonomy_term_synonym} where tid=:tid', array(':tid'=>$tid), array('target'=>'slave'))->fetchObject();
+        $voc = get_vocabolario($voc);
+        if ($tid > 0)
+            $synonyms .= "<b>Synonyms for $voc:</b></br>";
+        foreach ($rec as $result) {
+            $synonyms.= "<i>'" . $rec->name . "';</i> ";
+            $keywords[$rec->name] = $rec->name;
+        }
+        /*while ($rec = db_fetch_object($result)) {
+            $synonyms.= "<i>'" . $rec->name . "';</i> ";
+            $keywords[$rec->name] = $rec->name;
+        }*/
+
+        $form['sinonimi'] = array(
+            '#type' => 'item',
+            '#description' => t("In order to facilitate the cataloging of your learning object,
+      try to make use of these terms for its description"),
+            '#value' => $synonyms,
+        );
+        $synonyms.='</br>';
+    }
+
+    //registro la cache aggiornata
+    form_set_cache($_POST['form_id'], $form, $form_state);
+    //costruzione del form
+    $form = form_builder($_POST['form_id'], $form, $form_state);
+    //rendering del campo select 
+    $output.=drupal_render($form['sinonimi']);
+    //rendering del campo select 
+    //$output.=drupal_render($form['keywords']);
+    //passaggio della modifica
+
+    drupal_json_output(array('status' => TRUE, 'data' => $output));
+
+    exit;
+}
+
+//category_hint questa funzione è richiamata all'uscita dalla text area descrizione
+//ed è quella che avvia il provesso di controllo
+function category_hint() {
+    $description = $_POST['body'];
+    $title = $_POST['title'];
+
+    //$ret['message'] = "$category";
+    $ret = calcola_suggerimenti($title, $description);
+    $nH = 0;
+    $nV = 0;
+    $hint = array();
+    foreach ($ret['hint'] as $key => $value) {
+        $hint[] = $value;
+        $nH++;
+        $debug.="sugg.->$value</br> ";
+    }
+    $tid = array();
+    foreach ($_POST['taxonomy'] as $voc => $value) {
+        if ($value > 0) {
+            $debug.=$value . "-";
+            $tid[] = $value;
+            $nV++;
+        }
+    }
+
+
+    $debug.="nH  =  $nH **  nV = $nV</br>";
+
+    $message = '';
+    if ($nH == 0) {
+        if (strlen($description) > 0 && strlen($title) > 0)
+            $message.= "<font color='ff0000'>Sorry, no category suggested by this description. </font>";
+    }
+    else {
+        if ($nV > 1)
+            $defmsg = "<b>You have selected more than one category. This is the report for the categories you've selected:</b></br>";
+        foreach ($tid as $t) {
+            $debug .= $t . "-";
+            switch ($nH) {//dipendentemente da quanti sono i suggerimenti
+                case 0://nessun suggerimento
+                    $message .= '<font color="0000FF"><b>Sorry, no category suggested by this description</b></font></br>';
+                    break;
+                case 1://
+                    $message .= check_tid_single($t, $hint);
+                    break;
+                default:
+                    $message .= check_tid_multi($t, $hint);
+                    break;
+            }
+        }
+        if ($ret['message'] != '') {
+
+            $message = $defmsg . $message . '<i>This is the list of categories that are compatible with the text and 
+                their value inherence (Hin value) and relevance 
+                (max for single term% | total %):</i></br>';
+            if ($nV == 0)
+                $message.="<i>(Remember that <b>you haven't yet selected a category</b> from the vocabularies)</i></br>";
+        } else {
+            $message = $defmsg . $message;
+        }
+    }
+
+    $message.=$ret['message'];
+
+
+   
+    if (strlen($message) > 0)
+        $category_suggested = $message; // . $debug;
+    else
+        $category_suggested = "<font color='ff0000'>Sorry, no category suggested by this description. </font>";
+
+    $form = array(
+        '#type' => 'item',
+        '#title' => t('Categories suggested by Taxononomy assistant'), //t('Category Hint by Taxonomy Assistant'),
+        '#description' => t("Depending on your choices and the text entered in the fields 
+            'title' and 'description' Taxonomy Assistant suggests the 
+            categories that are most relevant to them."),
+        '#value' => $category_suggested,
+      //  '#weight' => 4,
+    );
+
+    $output = _tax_assistant_ahah_render($form, 'valutazione');
+    //Il metodo drupal_to_js viene sostituito poiché non è più prensente nella versione 7, va sostituita con drupal_json_encode.
+    print drupal_json_encode(array('data' => $output, 'status' => true));
+    exit();
+}
+
+//function calcola_suggerimenti
+function calcola_suggerimenti($title, $description) {
+    //inizializza l'array che verrà restituito dalla funzione
+    $ret = array(
+        'message' => '',
+        'hint' => array(),
+    );
+
+    $vid = array();
+    $tid = array();
+    $aRelevance = array();
+    $query_voc = '';
+    foreach ($_POST['taxonomy'] as $voc => $value) {
+        if ($_POST['taxonomy'][$voc] > 0)
+            $tid[] = $_POST['taxonomy'][$voc];
+        $vid[] = $voc;
+        if (strlen($query_voc) > 0)
+            $query_voc.=" or t1.vid=$voc ";
+        else
+            $query_voc.="( t1.vid=$voc ";
+    }
+    if (strlen($query_voc) > 0)
+        $query_voc.=") ";
+//  VERIFICA CHE NON SIA NULLA LA DESCRIZIONE, IL TITOLO E LA PRELIMINARY ID  	
+    if (strlen($description) > 0 && strlen($title) > 0) {
+        //CONVERTE TUTTO IL TESTO IN CARATTERI MINUSCOLI e UNISCE description e title
+        $text = strtolower($title . " " . $description);
+        //rimozione simboli di punteggiatura e altro
+        //Penso che preg_replace cosi lo prenda senza problemi
+        $text = preg_replace("/[^A-Za-z0-9 ]/", " ", $text);
+        //La chiamata a questa funzione estrae le parole chiave con l'esclusione di quelle non valide e le 
+        //restituisce in un array
+
+        $arrayKeyWords = extractKeyWords($text);
+        $nKeys = count($arrayKeyWords); //questo e' il numero iniziale di termini che andro' a cercare
+
+        foreach ($arrayKeyWords as $key => $word) {
+            $r = get_singolare($word);
+            if ($r['s1'] != NULL) {
+                $arrayKeyWords[] = $r['s1'];
+            }
+            if ($r['s2'] != NULL) {
+                $arrayKeyWords[] = $r['s2'];
+            }
+            $r = get_plurale($word);
+            if ($r['s1'] != NULL) {
+                $arrayKeyWords[] = $r['s1'];
+            }
+            if ($r['s2'] != NULL) {
+                $arrayKeyWords[] = $r['s2'];
+            }
+        }
+
+        $arrayKeyWords = array_unique($arrayKeyWords);
+
+        //generazione query che determina i conteggi
+        $sub1 = "";
+        //conta le parole chiave (comprensive dei termini aggiunti sing. e plurali
+
+        $options = array();
+        foreach ($arrayKeyWords as $key => $value) {
+            $options[] = "%" . $arrayKeyWords[$key] . "%";
+            $sub1 .= "S1.name like '%s' or "; //questo è il modo corretto pe far accettare
+            // a Drupal like '%stringa%' altri metodi non funzionano
+        }
+        //rimuove l'ultimo or dalla stringa
+        $sub1 = substr($sub1, 0, strlen($sub1) - 3);
+
+        //questa query esegue la selezione su tutti i vocabolari
+
+        /*$query = "select t1.vid,t1.tid,t1.name as category,S1.tsid,S1.name as synonym,H1.parent , D1.depth
+                    FROM {term_data} t1
+                    LEFT JOIN {term_synonym} S1
+                    ON t1.tid=S1.tid
+                    JOIN {term_hierarchy} H1 ON t1.tid=H1.tid
+                    JOIN {dis_cat_terms_depth} D1 ON t1.tid = D1.tid 
+                    WHERE (" . $sub1 . ") 
+                    ORDER BY `D1`.`depth` DESC, `t1`.`tid` ASC";
+        */
+
+        //$result = db_query($query);
+        //$result = db_query($query, $options);
+        $query=db_select('taxonomy_term_data', 't1')
+           ->fields('t1', array('vid','tid', 'name'))
+           ->fields('S1', array('name'))
+           ->fields('H1', array('parent'))
+           ->fields('D1', array('depth'))
+           ->addfield('t1', 'name', 'category');
+           $query->addfield('S1', 'name', 'synonym');
+           $query->join('taxonomy_term_hierarchy', 'H1', 't1.tid=H1.tid');
+           $query->leftjoin('taxonomy_vocabulary', 'S1', 't1.tid=S1.tid');
+           $query->join('dis_cat_terms_depth', 'D1', 't1.tid=D1.tid');
+           $query->condition('t1.tid', $sub1, '=');
+           $query->orderby('D1.depth','DESC')->orderby('t1.tid','ASC');
+        $rec=$query->execute();
+        $result = db_query($query, $options);
+
+        //visualizzo i risultati
+        $arrayTab = array();
+
+        $nRec = 0;
+        foreach ($rec as $result) {
+            $nRec++; //numero di record
+            $arrayTab[] = $result;
+            $debug.="$result->vid  $result->tid  $result->category $result->synonym $result->parent $result->depth </br>";
+        }
+        /*while ($rec = db_fetch_array($result)) {
+            $nRec++; //numero di record
+            $arrayTab[] = $rec;
+            $debug.="$rec[vid] $rec[tid] $rec[category] $rec[tsid] $rec[synonym] $rec[parent] $rec[depth]  </br>";
+        }*/
+
+
+        $debug.="<<" . count($arrayTab) . ">></br>"; //RIMUOVERE TEST
+        $debug.="<< $query >></br>"; //RIMUOVERE TEST
+        foreach ($options as $value) {
+            $debug.=$value . " ";
+        }
+        $tid = '';
+        $hin = 0;
+        $aHin = array();
+        $aWords = array();
+        //effettua il conteggio  delle parole chiave trovate e le memorizza
+        //nell'arrary $aHin
+
+        for ($i = 0; $i < $nRec; $i++) { //verifica se il tid e' lo stesso del precedente
+            if ($tid != $arrayTab[$i]['tid']) { //se non lo e' crea un nuovo contatore
+                $tid = $arrayTab[$i]['tid'];
+                $aHin[$tid] = 0; //e lo inizializza
+                $aWords[$tid] = ""; //inizializza le parole chiave associate
+            }
+
+
+            $debug.="nKey=$nKeys </br>";
+            $aRet = calcola($arrayKeyWords, $arrayTab[$i], $nKeys); //valuta inerenza facendo
+            //doppio confronto  
+            //in $aRet abbiamo un array che contiene informazioni sul valore
+            //di inerenza e la percentuale di parole trovate
+            $aHin[$tid] += $aRet['value'];
+
+            if ($aRelevance[$tid] < $aRet['relevance'])
+                $aRelevance[$tid] = $aRet['relevance'];
+
+            $aTotRelevance[$tid] += $aRet['relevance'];
+			$aTotRelevance[$tid] += $aRet['relevance'];
+            if (!isset($aWords[$tid]['words']))
+                $aWords[$tid]['words'] = array();
+            $aWords[$tid]['words'] = combina($aWords[$tid]['words'], $aRet['words']);
+        }
+        foreach ($aWords as $tid => $value) {
+            $aWords[$tid]['words'] = rem_double($aWords[$tid]['words']);
+        }
+
+        //somma i conteggi ai vari livelli dell'albero
+        $key = array_keys($aHin);   //ricava le chiavi associative dell'array
+        $nEl = count($key);         //ricava il numero di chiavi
+        $debug.="n.elementi: $nEl</br>";
+        $totHin = array();          //nuovo array che conterra' i conteggi
+        //per ogni categoria effettua il conteggio risalendo l'albero fino alla radice
+        for ($i = 0; $i < $nEl; $i++) {
+            $n = $aHin[$key[$i]];
+            if ($n >= 0)
+                $n+=countTree($key[$i], $aHin);
+            $totHin[$key[$i]] = $n;
+        }
+    } else {
+        $ret['message'] .= "<font color='ff0000'>You must enter Title and description</font></br>";
+
+        return $ret;
+    }
+
+    //ordina l'array risultante in ordine discendente
+    arsort($totHin);
+    //rapporta il risultato a 100
+
+    $k = array_keys($totHin);
+    $max = $totHin[$k[0]];
+    foreach ($totHin as $key => $value) {
+        if ($max > 0)
+            $totHin[$key] = $value / $max * 100;
+    }
+
+
+    $n = 0;
+    $prec = '';
+    $message='
+<table>
+<tr>
+<th>Category</th>
+<th>Keywords</th>
+<th>Hin Value</th>
+<th>Max</br>Relevance</th>
+<th>Total</br> Relevance</th>
+</tr>';
+
+    foreach ($totHin as $key => $val) {
+
+        $n++;
+        if ($n == 1) {
+            $prec = $val;
+            $ret['hint'][] = $key;
+        } else {
+            if ($val == $prec) {
+                //nel caso di valori di inerenza uguali
+                //vengono aggiunti tutti gli elementi di uguale
+                //valore
+                $ret['hint'][] = $key;
+            }
+        }
+        if ($val >= 0 && $aRelevance[$key] > 0) {//se imposto solo > non ho risultati nel caso di radici dell'albero
+            if ($n == 1 || $val == $prec) {
+
+                $message.="<tr>
+                            <td><font color=”#008F00”>" . get_category($key) . "</font></td>                            
+                            <td><font color=”#008F00”><b>" . mostraKeyWords($aWords[$key]) ."</b></font></td>
+                            <td><font color=”#008F00”><b>" . round($val, 1) . "</b></font></td>
+                            <td><font color=”#008F00”><b>" . round($aRelevance[$key], 1) ."</b>%</font></td>
+                            <td><font color=”#008F00”><b>" . round($aTotRelevance[$key], 1) . "</b>% </i></font></td>
+                           </tr>";
+            } else {
+
+                $message.="<tr>
+                            <td>" . get_category($key) . "</td>                           
+                            <td><b>" . mostraKeyWords($aWords[$key]) ."</b></td>
+                            <td><b>" . round($val, 1) . "</b></td>
+                            <td><b>" . round($aRelevance[$key], 1) ."</b>%</td>
+                            <td><b>" . round($aTotRelevance[$key], 1) . "</b>% </i></td>
+                           </tr>";
+            }
+        }
+    }
+$message.='</table>';
+    $ret['message'] .= $message;
+    return $ret;
+}
+
+function check_tid_single($t, $hint) {
+    if ($t > 0) {
+        if ($t == $hint[0]) {
+            $msg = '<font color="00AA00">The selected category <b>' . get_category($t) . '</b> is correct</b></font></br>';
+        } else {
+            $msg = '<font color="#FF7700"><i>The category selected: <b>' . get_category($t) . '</b> does not match what suggested.</br>
+  You are invited to use other synonyms more specific in your description in order to enable a correct cataloging or change your selection.</font></br>';
+        }
+    }
+    return $msg;
+}
+
+function check_tid_multi($t, $hint) {
+    if ($t > 0) {
+        $msg = '<font color="#FF7700"><i><b>The category selected: <b>' . get_category($t) . '</b> does not match what suggested. </b></br>
+  You are invited to use other synonyms more specific in your description in order to enable a correct cataloging or change your selection.</font></br>';
+        foreach ($hint as $h) {
+            if ($t == $h) {
+                $msg = '<font color="#bb8800"><i>The category selected: <b>' . get_category($t) . '</b> is <b>valid, but is not unique</b>. </br>
+  You are invited to add other synonyms more specific in order to enable a correct cataloging.</br></i></font>';
+            }
+        }
+    }
+    return $msg;
+}
+
+function combina($aRec, $aRet) {
+    $aLocal = array();
+
+    foreach ($aRec as $key => $value) {
+        $aLocal[] = $value;
+    }
+
+    if (count($aRet) > 0) {
+        foreach ($aRet as $key => $value) {
+            $aLocal[] = $value;
+        }
+    }
+    $aLocal = array_unique($aLocal); //elimina doppioni
+    return $aLocal;
+}
+
+function eliminaStopKeyWords($text) {
+
+    $aText = extractKeyWords($text);
+    $text = "";
+    for ($i = 0; $i < count($aText); $i++)
+        $text .= $aText[$i] . " ";
+    $text = trim($text);
+
+    return $text;
+}
+
+function get_category($key) {
+    $result=db_query("SELECT tid,name as category FROM {taxonomy_term_data} WHERE tid=:key", array(':tid'=>$key),array('target'=>'slave'));
+    //$query = "SELECT tid, name as category FROM {term_data} WHERE tid=$key";
+    //$result = db_query($query);
+    //$rec = db_fetch_array($result);
+    foreach ($rec as $result) {
+       return $rec->category;
+    }
+    
+}
+
+function mostraKeyWords($aWords) {
+    $stringa = "";
+    foreach ($aWords['words'] as $key => $value) {
+        $stringa.="'$value' ";
+    }
+    return $stringa;
+}
+
+function countTree($key, $aHin) {
+    $hier = get_parent($key);
+    $n = "";
+    if ($hier['depth'] != 0) {//caso base se il valore di depth = 0
+        if (isset($aHin[$hier['parent']]))
+            return $aHin[$hier['parent']] + countTree($hier['parent'], $aHin);
+        else
+            return countTree($hier['parent'], $aHin);
+    }
+    return 0;
+}
+
+function get_parent($tid) {
+     $query = db_select('taxonomy_term_hierarchy','T');
+     $query->join('dis_cat_terms_depth','D','D.tid = T.tid');
+     $query->fields('T',array('parent'))
+      ->fields('D',array('depth'))
+      ->condition('T.tid', $tid, '=') ;
+     $result = $query->execute()->fetchAll();
+
+    //db_fetch_array in drupal 7 viene modificato con il termine fetchAssoc() dopo la query;
+     /*while($record = $result) {
+       print_r($record);
+     }*/
+        return $result;
+    /*$query = "SELECT T.parent, D.depth FROM {term_hierarchy} T
+            JOIN {dis_cat_terms_depth}  D 
+            on T.tid=D.tid
+            where T.tid='$tid'";*/
+    /*$result=db_query($query);
+    foreach ($rec as $result) {
+        return;
+    }*/
+    //$rec = db_fetch_array(/* , MYSQL_ASSOC */);
+    //return $rec;
+}
+
+function calcola($arrayKeyWords, $rec, $nKeys) {
+
+    $rec['synonym'] = strtolower($rec['synonym']);
+
+    //ripulisce dai sinonimi le stopKeyWords
+    $synComplete = $rec['synonym'];
+    $rec['synonym'] = ereg_replace("[^A-Za-z0-9 ]", " ", $rec['synonym']);
+    $rec['synonym'] = eliminaStopKeywords($rec['synonym']);
+    //estrae tutti i sinonimi e li mette nell'array $aSyn
+    $aSyn = explode(" ", $rec['synonym']);
+
+    //effettua il confronto tra l'array dei sinonimi e quello delle keywords
+    $res = array_intersect($aSyn, $arrayKeyWords);
+    $nRes = count($res);
+    //aRet contiene la struttura dati di ritorno della funzione
+    $aRet['tid'] = $rec['tid'];
+    $aRet['relevance'] = 0;
+
+
+    $rap = 0;
+    if ($nRes > 0) {
+        //conta quanti sono i sinonimi 
+        $nSyn = count($aSyn);
+        //calcola l'inerenza con la seguente formula
+        $val = pow($nRes, $nRes / $nSyn) * $rec['depth'];
+
+
+        if ($nSyn > 0) {
+            $rap = ($nRes / $nSyn);
+            $relevance = ($nRes / $nKeys) * 100;
+        }
+        else
+            $relevance = 0;
+
+
+        $val*=$rap;
+        $val = $val * $relevance * $nRes;
+        $aRet['relevance'] = $relevance;
+        $aRet['value'] = $val;
+    }
+    else
+        $aRet['value'] = 0;
+
+
+//se il sinonimo composto è verificato al 100% allora la keyword assume 
+//il sinonimo completo
+    if ($rap == 1 && $nSyn > 1) {
+        $aRet['words'] = $res;
+        $aRet['words'][] = $synComplete;
+    }
+    else
+        $aRet['words'] = $res;
+    return $aRet;
+}
+
+function rem_double($a1) {
+    foreach ($a1 as $value) {
+
+        $a2 = explode(' ', $value);
+        if (count($a2) > 1)
+            foreach ($a2 as $search) {
+                unset($a1[array_search($search, $a1)]);
+            }
+    }
+    return $a1;
+}
+
+function extractKeyWords($text) {
+
+
+    $stopwords = file_get_contents($_SERVER['DOCUMENT_ROOT'] . base_path() . drupal_get_path('module', 'tax_assistant') . '/stopwords.txt');
+
+    //$d=chr(13).chr(10);
+ 
+//    $arraystopwords = explode('
+//', $stopwords); //estrazione delle stopWords
+   
+    $arraystopwords = explode(' ', $stopwords);
+   
+    $keys = explode(' ', $text); //estrazione delle parole chiave dal testo   
+    $arrayResult = array_diff($keys, $arraystopwords); //rimozione delle stopWord contenute in $text                                             
+    $arrayResult = array_unique($arrayResult); //rimuove i termini duplicati
+
+    if (in_array("", $arrayResult))
+        unset($arrayResult[array_search("", $arrayResult)]); //rimuove la parola chiave vuota
+
+
+    sort($arrayResult); //esegue il sort dell'array ottenuto
+
+    return $arrayResult;
+}
+
+function get_plurale($stringa = "", $stringa2 = "") {
+
+    $ultimo = substr($stringa, strlen($stringa) - 1);
+    $penultimo = substr($stringa, strlen($stringa) - 2, 1);
+    if (strlen($stringa) > 0) {
+
+        switch ($ultimo) {
+            case 's':
+                $stringa.="es";
+                break;
+            case 'h':
+                if ($penultimo == 's' || $penultimo == 'c')
+                    $stringa.="es";
+                break;
+            case 'x':
+                $stringa.="es";
+                break;
+            case 'o':
+                if ($penultimo == 'a' || $penultimo == 'e' || $penultimo == 'i' || $penultimo == 'u')
+                    $stringa.="s";
+                else {
+                    $stringa2 = $stringa . "es";
+                    $stringa.="s";
+                }
+                break;
+
+            case 'y':
+                if ($penultimo == 'a' || $penultimo == 'e' || $penultimo == 'i' ||
+                        $penultimo == 'o' || $penultimo == 'u')
+                    $stringa.="s";
+                else
+                    $stringa = substr($stringa, 0, strlen($stringa) - 1) . "ies";
+                break;
+            case 'f':
+                $stringa = substr($stringa, 0, strlen($stringa) - 1) . "ves";
+                break;
+            case 'e':
+                if ($penultimo == 'f')
+                    $stringa = substr($stringa, 0, strlen($stringa) - 2) . 'ves';
+                else
+                    $stringa.='s';
+                break;
+            default:
+
+                if (strlen($stringa) > 0)
+                    $stringa.='s';
+                break;
+        }
+    }
+
+    return array(
+        's1' => $stringa,
+        's2' => $stringa2,
+    );
+}
+
+function get_singolare($stringa = "", $stringa2 = "") {
+
+    $ultimo = substr($stringa, strlen($stringa) - 1);
+    $penultimo = substr($stringa, strlen($stringa) - 2, 1);
+    $terzultimo = substr($stringa, strlen($stringa) - 3, 1);
+    if (strlen($stringa) > 0) {
+
+        switch ($ultimo) {
+            case 's':
+                switch ($penultimo) {
+                    case 'e':
+                        if ($terzultimo == 'i')
+                            $stringa = substr($stringa, 0, strlen($stringa) - 3) . 'y';
+                        else if ($terzultimo == 'v') {
+                            $stringa2 = substr($stringa, 0, strlen($stringa) - 3) . 'fe';
+                            $stringa = substr($stringa, 0, strlen($stringa) - 3) . 'f';
+                        } else if ($terzultimo == 's')
+                            $stringa = substr($stringa, 0, strlen($stringa) - 2);
+                        else
+                            $stringa = substr($stringa, 0, strlen($stringa) - 1);
+                        break;
+                    case 'o': {
+
+                            $stringa = substr($stringa, 0, strlen($stringa) - 1);
+                        }
+                        break;
+                    default:
+                        $stringa = substr($stringa, 0, strlen($stringa) - 1);
+                        break;
+                }
+
+                break;
+        }
+    }
+    return array(
+        's1' => $stringa,
+        's2' => $stringa2,
+    );
+}
+
+function _tax_assistant_ahah_render($fields, $name) {
+    $form_state = array('submitted' => FALSE);
+    $form_build_id = $_POST['form_build_id'];
+    $form = form_get_cache($form_build_id, $form_state);
+    $form[$name] = $fields;
+    form_set_cache($form_build_id, $form, $form_state);
+    $form += array(
+        '#post' => $_POST,
+        '#programmed' => FALSE,
+    );
+    $form = form_builder($_POST['form_id'], $form, $form_state);
+    $new_form = $form[$name];
+    return drupal_render($new_form);
+}

@@ -1,0 +1,7 @@
+; $Id$
+name = Linkable Learning Object Node 2.0
+description = A version linkable file node 2.0 by Brensacchi Enrico and Mazzacrelli Fabio based of version 1.0 of Bastianini Riccardo.
+core = 7.x
+dependencies[] = "entityreference"
+package = "linkableobject"
+;php = 5.5

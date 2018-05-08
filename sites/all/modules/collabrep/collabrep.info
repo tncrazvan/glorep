@@ -1,0 +1,7 @@
+; $Id$
+name = Collabrep 2.0
+description = A collaborative federate repository module 2.0 based of collabrep by Riccardo Bastianini.
+core = 7.x
+package = "CollabRep"
+dependencies[] = "linkableobject"
+
